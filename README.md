@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/mnevres/MN-PDF-Converter/main/icon.png" alt="PDFlip Icon" width="128" />
+  <img src="https://raw.githubusercontent.com/mnevres/PDFlip/main/icon.png" alt="PDFlip Icon" width="128" />
 
   <h1>PDFlip</h1>
   <p>Free and simple desktop PDF toolkit.</p>
@@ -39,7 +39,7 @@ Designed for efficiency, this tool helps you manage your documents quickly witho
 
 You can safely download the latest version of the program from the link below. The setup file allows you to easily install the program on your computer.
 
-[**>> Download the Latest Version <<**](https://github.com/mnevres/MN-PDF-Converter/releases/latest)
+[**>> Download the Latest Version <<**](https://github.com/mnevres/PDFlip/releases/latest)
 
 ## Feedback and Support
 
@@ -52,7 +52,7 @@ Your feedback, suggestions, or any bugs you encounter are very valuable to me. Y
     The most effective way to report a bug with details or to request a new feature is by using the "Issues" section on the project's GitHub page.
 
     * **Bug Report for PDFlip:**
-        [» PDFlip Issues Page](https://github.com/mnevres/MN-PDF-Converter/issues)
+        [» PDFlip Issues Page](https://github.com/mnevres/PDFlip/issues)
 
 ---
 
@@ -83,7 +83,7 @@ Verimlilik için tasarlanan bu araç, karmaşık yazılımlara ihtiyaç duymadan
 
 Programın en güncel sürümünü aşağıdaki bağlantıdan güvenle indirebilirsiniz. Kurulum dosyası, programı bilgisayarınıza kolayca kurmanızı sağlar.
 
-[**>> En Son Sürümü İndir <<**](https://github.com/mnevres/MN-PDF-Converter/releases/latest)
+[**>> En Son Sürümü İndir <<**](https://github.com/mnevres/PDFlip/releases/latest)
 
 ### Geri Bildirim ve Destek
 
@@ -96,7 +96,7 @@ Programla ilgili görüşleriniz, önerileriniz veya karşılaştığınız hata
     Karşılaştığınız bir hatayı detaylarıyla bildirmek veya yeni bir özellik talep etmek için en etkili yöntem, projenin GitHub sayfasındaki "Issues" bölümünü kullanmaktır.
 
     * **PDFlip için Hata Bildirimi:**
-        [» PDFlip Issues Sayfası](https://github.com/mnevres/MN-PDF-Converter/issues)
+        [» PDFlip Issues Sayfası](https://github.com/mnevres/PDFlip/issues)
 
 ---
 
