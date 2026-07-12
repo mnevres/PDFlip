@@ -1,5 +1,6 @@
 import sys
 import os
+import io
 import json
 import logging
 from logging.handlers import RotatingFileHandler
@@ -51,6 +52,14 @@ DEFAULT_LANGUAGE = 'en'
 # Büyük PDF'leri tek görselde birleştirirken kullanıcıyı uyarmak için sayfa eşiği
 LARGE_MERGE_PAGE_THRESHOLD = 150
 
+
+def format_size(num_bytes):
+    size = float(num_bytes)
+    for unit in ('B', 'KB', 'MB', 'GB'):
+        if size < 1024 or unit == 'GB':
+            return f"{size:.0f} {unit}" if unit == 'B' else f"{size:.1f} {unit}"
+        size /= 1024
+
 # Dil metinleri
 translations = {
     'en': {
@@ -80,6 +89,20 @@ translations = {
         'output_folder_prefix': 'Output Folder: ',
         'selected_folder_prefix': 'Selected Folder: ',
         'save': 'Save',
+        'tab3': 'Compress PDF',
+        'tab4': 'Extract Images',
+        'select_pdf_to_compress': 'Select PDF to Compress',
+        'select_pdf_to_extract': 'Select PDF',
+        'compression_level': 'Compression Level',
+        'compression_extreme': 'Extreme (Smallest Size)',
+        'compression_basic': 'Basic (Low Quality)',
+        'compression_balanced': 'Balanced (Standard)',
+        'compression_high': 'High Quality (Optimized)',
+        'start_compression': 'Compress PDF',
+        'start_extraction': 'Extract Images',
+        'compression_successful': 'PDF compressed: {before} → {after} ({percent}% smaller)',
+        'images_extracted_success': 'Extracted {count} image(s) to: ',
+        'no_embedded_images_error': 'No embedded images were found in this PDF.',
         'menu_settings': 'Settings',
         'menu_about': 'About',
         'about_message': (
@@ -119,6 +142,20 @@ translations = {
         'output_folder_prefix': 'Çıktı Klasörü: ',
         'selected_folder_prefix': 'Seçilen Klasör: ',
         'save': 'Kaydet',
+        'tab3': 'PDF Sıkıştır',
+        'tab4': 'Resimleri Çıkar',
+        'select_pdf_to_compress': 'Sıkıştırılacak PDF Seç',
+        'select_pdf_to_extract': 'PDF Seç',
+        'compression_level': 'Sıkıştırma Seviyesi',
+        'compression_extreme': 'Aşırı (En Küçük Boyut)',
+        'compression_basic': 'Temel (Düşük Kalite)',
+        'compression_balanced': 'Dengeli (Standart)',
+        'compression_high': 'Yüksek Kalite (Optimize)',
+        'start_compression': 'PDF\'yi Sıkıştır',
+        'start_extraction': 'Resimleri Çıkar',
+        'compression_successful': 'PDF sıkıştırıldı: {before} → {after} (%{percent} küçüldü)',
+        'images_extracted_success': '{count} resim çıkarıldı: ',
+        'no_embedded_images_error': 'Bu PDF içinde gömülü resim bulunamadı.',
         'menu_settings': 'Ayarlar',
         'menu_about': 'Hakkında',
         'about_message': (
@@ -259,6 +296,137 @@ class ImageToPdfWorker(QThread):
                 doc.close()
 
 
+class PdfCompressWorker(QThread):
+    """Gömülü resimleri yeniden sıkıştırarak PDF boyutunu küçültür; metin/vektör içerik korunur."""
+    progress = pyqtSignal(int, int)
+    finished = pyqtSignal(bool, str)
+
+    QUALITY_PRESETS = {
+        'extreme':  {'jpeg_quality': 25, 'max_dimension': 800},
+        'basic':    {'jpeg_quality': 45, 'max_dimension': 1200},
+        'balanced': {'jpeg_quality': 65, 'max_dimension': 1600},
+        'high':     {'jpeg_quality': 85, 'max_dimension': 2400},
+    }
+
+    def __init__(self, pdf_path, save_path, level):
+        super().__init__()
+        self.pdf_path = pdf_path
+        self.save_path = save_path
+        self.level = level
+
+    def _recompress_image(self, extracted, preset):
+        pil_img = Image.open(io.BytesIO(extracted['image']))
+        has_alpha = bool(extracted.get('smask')) or pil_img.mode in ('RGBA', 'LA') or (
+            pil_img.mode == 'P' and 'transparency' in pil_img.info
+        )
+
+        width, height = pil_img.size
+        max_dim = preset['max_dimension']
+        if max(width, height) > max_dim:
+            scale = max_dim / max(width, height)
+            new_size = (max(1, int(width * scale)), max(1, int(height * scale)))
+            pil_img = pil_img.resize(new_size, Image.Resampling.LANCZOS)
+
+        buf = io.BytesIO()
+        if has_alpha:
+            pil_img.convert('RGBA').save(buf, format='PNG', optimize=True)
+        else:
+            pil_img.convert('RGB').save(buf, format='JPEG', quality=preset['jpeg_quality'])
+        return buf.getvalue()
+
+    def run(self):
+        doc = None
+        try:
+            original_size = os.path.getsize(self.pdf_path)
+            doc = fitz.open(self.pdf_path)
+            if doc.needs_pass:
+                raise ValueError("PDF_PASSWORD_PROTECTED")
+
+            preset = self.QUALITY_PRESETS[self.level]
+            page_count = len(doc)
+            seen_xrefs = set()
+
+            for i in range(page_count):
+                page = doc.load_page(i)
+                for img_info in page.get_images(full=True):
+                    xref = img_info[0]
+                    if xref in seen_xrefs:
+                        continue
+                    seen_xrefs.add(xref)
+                    try:
+                        extracted = doc.extract_image(xref)
+                        new_bytes = self._recompress_image(extracted, preset)
+                        # Zaten iyi sıkıştırılmış küçük görselleri büyütmemek için kontrol ediyoruz.
+                        if len(new_bytes) < len(extracted['image']):
+                            page.replace_image(xref, stream=new_bytes)
+                    except Exception as image_error:
+                        logging.warning(f"Skipping image xref {xref} during compression: {image_error}")
+                self.progress.emit(i + 1, page_count)
+
+            base_name = os.path.splitext(os.path.basename(self.pdf_path))[0]
+            out_path = os.path.join(self.save_path, f"{base_name}_compressed.pdf")
+            doc.save(out_path, garbage=4, deflate=True, clean=True)
+
+            new_size = os.path.getsize(out_path)
+            self.finished.emit(True, f"{original_size}|{new_size}")
+            logging.info(f"PDF compressed: {original_size} -> {new_size} bytes")
+        except Exception as e:
+            logging.error(f"Compression failed: {e}")
+            self.finished.emit(False, str(e))
+        finally:
+            if doc is not None:
+                doc.close()
+
+
+class ImageExtractWorker(QThread):
+    """PDF içine gömülü resimleri orijinal bytes hâliyle (yeniden kodlamadan) diske yazar."""
+    progress = pyqtSignal(int, int)
+    finished = pyqtSignal(bool, str)
+
+    def __init__(self, pdf_path, save_path):
+        super().__init__()
+        self.pdf_path = pdf_path
+        self.save_path = save_path
+
+    def run(self):
+        doc = None
+        try:
+            doc = fitz.open(self.pdf_path)
+            if doc.needs_pass:
+                raise ValueError("PDF_PASSWORD_PROTECTED")
+
+            page_count = len(doc)
+            seen_xrefs = set()
+            extracted_count = 0
+
+            for i in range(page_count):
+                page = doc.load_page(i)
+                for img_index, img_info in enumerate(page.get_images(full=True), start=1):
+                    xref = img_info[0]
+                    if xref in seen_xrefs:
+                        continue
+                    seen_xrefs.add(xref)
+                    extracted = doc.extract_image(xref)
+                    out_name = f"page{i + 1}_image{img_index}.{extracted['ext']}"
+                    with open(os.path.join(self.save_path, out_name), 'wb') as f:
+                        f.write(extracted['image'])
+                    extracted_count += 1
+                    logging.debug(f"Extracted embedded image: {out_name}")
+                self.progress.emit(i + 1, page_count)
+
+            if extracted_count == 0:
+                self.finished.emit(False, "NO_EMBEDDED_IMAGES")
+            else:
+                self.finished.emit(True, str(extracted_count))
+                logging.info(f"Extracted {extracted_count} embedded image(s)")
+        except Exception as e:
+            logging.error(f"Image extraction failed: {e}")
+            self.finished.emit(False, str(e))
+        finally:
+            if doc is not None:
+                doc.close()
+
+
 class PDFToImageConverter(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -266,6 +434,8 @@ class PDFToImageConverter(QMainWindow):
         self.translations = translations[self.language]
         self.pdf_worker = None
         self.image_worker = None
+        self.compress_worker = None
+        self.extract_worker = None
         self.initUI()
 
     def initUI(self):
@@ -281,12 +451,18 @@ class PDFToImageConverter(QMainWindow):
         self.tabs = QTabWidget()
         self.pdf_to_image_tab = QWidget()
         self.image_to_pdf_tab = QWidget()
+        self.compress_pdf_tab = QWidget()
+        self.extract_images_tab = QWidget()
 
         self.tabs.addTab(self.pdf_to_image_tab, self.translations['tab1'])
         self.tabs.addTab(self.image_to_pdf_tab, self.translations['tab2'])
+        self.tabs.addTab(self.compress_pdf_tab, self.translations['tab3'])
+        self.tabs.addTab(self.extract_images_tab, self.translations['tab4'])
 
         self.init_pdf_to_image_tab()
         self.init_image_to_pdf_tab()
+        self.init_compress_pdf_tab()
+        self.init_extract_images_tab()
 
         self.layout.addWidget(self.tabs)
         self.create_menu()
@@ -299,6 +475,10 @@ class PDFToImageConverter(QMainWindow):
         self.pdf_path = ''
         self.save_path = ''
         self.image_folder = ''
+        self.compress_pdf_path = ''
+        self.compress_output_path = ''
+        self.extract_pdf_path = ''
+        self.extract_output_path = ''
 
         self.update_button_states()
         logging.debug("UI initialized")
@@ -412,6 +592,109 @@ class PDFToImageConverter(QMainWindow):
 
         self.image_to_pdf_tab.setLayout(self.image_to_pdf_layout)
 
+    def init_compress_pdf_tab(self):
+        font = QFont()
+        font.setPointSize(12)
+
+        self.compress_layout = QVBoxLayout()
+        self.compress_layout.setAlignment(Qt.AlignTop)
+
+        self.compress_select_btn = QPushButton(self.translations['select_pdf_to_compress'], self)
+        self.compress_select_btn.setFont(font)
+        self.compress_select_btn.clicked.connect(self.select_compress_pdf)
+        self.compress_select_btn.setStyleSheet("color: white; padding: 10px; background-color: #3b3b3b; border-radius: 5px;")
+        self.compress_layout.addWidget(self.compress_select_btn)
+
+        self.compress_pdf_label = QLabel('', self)
+        self.compress_pdf_label.setFont(QFont("", 12))
+        self.compress_pdf_label.setStyleSheet("color: #1b1c1c;")
+        self.compress_layout.addWidget(self.compress_pdf_label)
+
+        self.compress_output_btn = QPushButton(self.translations['select_output_folder'], self)
+        self.compress_output_btn.setFont(font)
+        self.compress_output_btn.clicked.connect(self.select_compress_output)
+        self.compress_output_btn.setStyleSheet("color: white; padding: 10px; background-color: #3b3b3b; border-radius: 5px;")
+        self.compress_layout.addWidget(self.compress_output_btn)
+
+        self.compress_output_label = QLabel('', self)
+        self.compress_output_label.setFont(QFont("", 12))
+        self.compress_output_label.setStyleSheet("color: #1b1c1c;")
+        self.compress_layout.addWidget(self.compress_output_label)
+
+        self.compression_level_options = QComboBox(self)
+        self.compression_level_options.setFont(font)
+        self.compression_level_options.setStyleSheet("padding: 5px; background-color: #3b3b3b; color: white; border-radius: 5px;")
+        self.compression_level_options.addItem(self.translations['compression_extreme'], 'extreme')
+        self.compression_level_options.addItem(self.translations['compression_basic'], 'basic')
+        self.compression_level_options.addItem(self.translations['compression_balanced'], 'balanced')
+        self.compression_level_options.addItem(self.translations['compression_high'], 'high')
+        self.compression_level_options.setCurrentIndex(2)  # Dengeli (Standart) varsayılan
+        self.compression_level_options.currentIndexChanged.connect(self.clear_compress_status)
+        self.compress_layout.addWidget(self.compression_level_options)
+
+        self.compress_start_btn = QPushButton(self.translations['start_compression'], self)
+        self.compress_start_btn.setFont(font)
+        self.compress_start_btn.clicked.connect(self.process_compress_pdf)
+        self.compress_start_btn.setStyleSheet("padding: 10px; background-color: #3b3b3b; color: white; border-radius: 5px;")
+        self.compress_layout.addWidget(self.compress_start_btn)
+
+        self.compress_progress_bar = QProgressBar(self)
+        self.compress_progress_bar.setVisible(False)
+        self.compress_layout.addWidget(self.compress_progress_bar)
+
+        self.compress_status_label = QLabel('', self)
+        self.compress_status_label.setFont(font)
+        self.compress_status_label.setStyleSheet("color: #1b1c1c;")
+        self.compress_layout.addWidget(self.compress_status_label)
+
+        self.compress_pdf_tab.setLayout(self.compress_layout)
+
+    def init_extract_images_tab(self):
+        font = QFont()
+        font.setPointSize(12)
+
+        self.extract_layout = QVBoxLayout()
+        self.extract_layout.setAlignment(Qt.AlignTop)
+
+        self.extract_select_btn = QPushButton(self.translations['select_pdf_to_extract'], self)
+        self.extract_select_btn.setFont(font)
+        self.extract_select_btn.clicked.connect(self.select_extract_pdf)
+        self.extract_select_btn.setStyleSheet("color: white; padding: 10px; background-color: #3b3b3b; border-radius: 5px;")
+        self.extract_layout.addWidget(self.extract_select_btn)
+
+        self.extract_pdf_label = QLabel('', self)
+        self.extract_pdf_label.setFont(QFont("", 12))
+        self.extract_pdf_label.setStyleSheet("color: #1b1c1c;")
+        self.extract_layout.addWidget(self.extract_pdf_label)
+
+        self.extract_output_btn = QPushButton(self.translations['select_output_folder'], self)
+        self.extract_output_btn.setFont(font)
+        self.extract_output_btn.clicked.connect(self.select_extract_output)
+        self.extract_output_btn.setStyleSheet("color: white; padding: 10px; background-color: #3b3b3b; border-radius: 5px;")
+        self.extract_layout.addWidget(self.extract_output_btn)
+
+        self.extract_output_label = QLabel('', self)
+        self.extract_output_label.setFont(QFont("", 12))
+        self.extract_output_label.setStyleSheet("color: #1b1c1c;")
+        self.extract_layout.addWidget(self.extract_output_label)
+
+        self.extract_start_btn = QPushButton(self.translations['start_extraction'], self)
+        self.extract_start_btn.setFont(font)
+        self.extract_start_btn.clicked.connect(self.process_extract_images)
+        self.extract_start_btn.setStyleSheet("padding: 10px; background-color: #3b3b3b; color: white; border-radius: 5px;")
+        self.extract_layout.addWidget(self.extract_start_btn)
+
+        self.extract_progress_bar = QProgressBar(self)
+        self.extract_progress_bar.setVisible(False)
+        self.extract_layout.addWidget(self.extract_progress_bar)
+
+        self.extract_status_label = QLabel('', self)
+        self.extract_status_label.setFont(font)
+        self.extract_status_label.setStyleSheet("color: #1b1c1c;")
+        self.extract_layout.addWidget(self.extract_status_label)
+
+        self.extract_images_tab.setLayout(self.extract_layout)
+
     def update_button_states(self):
         if self.pdf_path:
             self.upload_btn.setStyleSheet("background-color: #77dd77; color: white; padding: 10px; border-radius: 5px;")
@@ -431,6 +714,34 @@ class PDFToImageConverter(QMainWindow):
             self.select_images_btn.setStyleSheet("background-color: #77dd77; color: white; padding: 10px; border-radius: 5px;")
         else:
             self.select_images_btn.setStyleSheet("background-color: #ff6961; color: white; padding: 10px; border-radius: 5px;")
+
+        if self.compress_pdf_path:
+            self.compress_select_btn.setStyleSheet("background-color: #77dd77; color: white; padding: 10px; border-radius: 5px;")
+            self.compress_pdf_label.setText(f"{self.translations['selected_pdf_prefix']}{self.compress_pdf_path}")
+        else:
+            self.compress_select_btn.setStyleSheet("background-color: #ff6961; color: white; padding: 10px; border-radius: 5px;")
+            self.compress_pdf_label.setText("")
+
+        if self.compress_output_path:
+            self.compress_output_btn.setStyleSheet("background-color: #77dd77; color: white; padding: 10px; border-radius: 5px;")
+            self.compress_output_label.setText(f"{self.translations['output_folder_prefix']}{self.compress_output_path}")
+        else:
+            self.compress_output_btn.setStyleSheet("background-color: #ff6961; color: white; padding: 10px; border-radius: 5px;")
+            self.compress_output_label.setText("")
+
+        if self.extract_pdf_path:
+            self.extract_select_btn.setStyleSheet("background-color: #77dd77; color: white; padding: 10px; border-radius: 5px;")
+            self.extract_pdf_label.setText(f"{self.translations['selected_pdf_prefix']}{self.extract_pdf_path}")
+        else:
+            self.extract_select_btn.setStyleSheet("background-color: #ff6961; color: white; padding: 10px; border-radius: 5px;")
+            self.extract_pdf_label.setText("")
+
+        if self.extract_output_path:
+            self.extract_output_btn.setStyleSheet("background-color: #77dd77; color: white; padding: 10px; border-radius: 5px;")
+            self.extract_output_label.setText(f"{self.translations['output_folder_prefix']}{self.extract_output_path}")
+        else:
+            self.extract_output_btn.setStyleSheet("background-color: #ff6961; color: white; padding: 10px; border-radius: 5px;")
+            self.extract_output_label.setText("")
 
     def clear_status(self):
         self.status_label.setText('')
@@ -581,6 +892,154 @@ class PDFToImageConverter(QMainWindow):
 
         self.image_worker = None
 
+    def select_compress_pdf(self):
+        options = QFileDialog.Options()
+        self.compress_pdf_path, _ = QFileDialog.getOpenFileName(self, self.translations['select_pdf_to_compress'], "", "PDF Files (*.pdf);;All Files (*)", options=options)
+        self.update_button_states()
+        self.clear_compress_status()
+        logging.debug(f"PDF selected for compression: {self.compress_pdf_path}")
+
+    def select_compress_output(self):
+        options = QFileDialog.Options()
+        self.compress_output_path = QFileDialog.getExistingDirectory(self, self.translations['select_output_folder'], "", options=options)
+        self.update_button_states()
+        self.clear_compress_status()
+        logging.debug(f"Output folder selected for compression: {self.compress_output_path}")
+
+    def clear_compress_status(self):
+        self.compress_status_label.setText('')
+
+    def _set_compress_controls_enabled(self, enabled):
+        self.compress_select_btn.setEnabled(enabled)
+        self.compress_output_btn.setEnabled(enabled)
+        self.compression_level_options.setEnabled(enabled)
+        self.compress_start_btn.setEnabled(enabled)
+
+    def process_compress_pdf(self):
+        if not self.compress_pdf_path or not self.compress_output_path:
+            self.show_message(self.translations['error'], self.translations['select_pdf_error'])
+            logging.error("PDF file or output folder not selected for compression")
+            return
+
+        if self.compress_worker is not None and self.compress_worker.isRunning():
+            return
+
+        level = self.compression_level_options.currentData()
+
+        self._set_compress_controls_enabled(False)
+        self.compress_start_btn.setStyleSheet("padding: 10px; background-color: #3b3b3b; color: white; border: 2px solid green; border-radius: 5px;")
+        self.compress_progress_bar.setVisible(True)
+        self.compress_progress_bar.setValue(0)
+        self.compress_status_label.setText('')
+
+        self.compress_worker = PdfCompressWorker(self.compress_pdf_path, self.compress_output_path, level)
+        self.compress_worker.progress.connect(self.on_compress_progress)
+        self.compress_worker.finished.connect(self.on_compress_finished)
+        self.compress_worker.start()
+
+    def on_compress_progress(self, current, total):
+        self.compress_progress_bar.setMaximum(total)
+        self.compress_progress_bar.setValue(current)
+        self.compress_status_label.setText(f"{current}/{total}")
+
+    def on_compress_finished(self, success, payload):
+        self._set_compress_controls_enabled(True)
+        self.compress_start_btn.setStyleSheet("padding: 10px; background-color: #3b3b3b; color: white; border-radius: 5px;")
+        self.compress_progress_bar.setVisible(False)
+
+        if success:
+            before_str, after_str = payload.split('|')
+            before, after = int(before_str), int(after_str)
+            percent = round((1 - after / before) * 100) if before else 0
+            message = self.translations['compression_successful'].format(
+                before=format_size(before), after=format_size(after), percent=percent
+            )
+            self.show_message(self.translations['success'], message)
+            self.reset_compress_state()
+        elif payload == "PDF_PASSWORD_PROTECTED":
+            self.show_message(self.translations['error'], self.translations['password_protected_error'])
+        else:
+            self.show_message(self.translations['error'], f"{self.translations['conversion_failed']}{payload}")
+
+        self.compress_worker = None
+
+    def reset_compress_state(self):
+        self.compress_pdf_path = ""
+        self.compress_output_path = ""
+        self.update_button_states()
+        self.compress_status_label.setText("")
+
+    def select_extract_pdf(self):
+        options = QFileDialog.Options()
+        self.extract_pdf_path, _ = QFileDialog.getOpenFileName(self, self.translations['select_pdf_to_extract'], "", "PDF Files (*.pdf);;All Files (*)", options=options)
+        self.update_button_states()
+        self.clear_extract_status()
+        logging.debug(f"PDF selected for image extraction: {self.extract_pdf_path}")
+
+    def select_extract_output(self):
+        options = QFileDialog.Options()
+        self.extract_output_path = QFileDialog.getExistingDirectory(self, self.translations['select_output_folder'], "", options=options)
+        self.update_button_states()
+        self.clear_extract_status()
+        logging.debug(f"Output folder selected for image extraction: {self.extract_output_path}")
+
+    def clear_extract_status(self):
+        self.extract_status_label.setText('')
+
+    def _set_extract_controls_enabled(self, enabled):
+        self.extract_select_btn.setEnabled(enabled)
+        self.extract_output_btn.setEnabled(enabled)
+        self.extract_start_btn.setEnabled(enabled)
+
+    def process_extract_images(self):
+        if not self.extract_pdf_path or not self.extract_output_path:
+            self.show_message(self.translations['error'], self.translations['select_pdf_error'])
+            logging.error("PDF file or output folder not selected for image extraction")
+            return
+
+        if self.extract_worker is not None and self.extract_worker.isRunning():
+            return
+
+        self._set_extract_controls_enabled(False)
+        self.extract_start_btn.setStyleSheet("padding: 10px; background-color: #3b3b3b; color: white; border: 2px solid green; border-radius: 5px;")
+        self.extract_progress_bar.setVisible(True)
+        self.extract_progress_bar.setValue(0)
+        self.extract_status_label.setText('')
+
+        self.extract_worker = ImageExtractWorker(self.extract_pdf_path, self.extract_output_path)
+        self.extract_worker.progress.connect(self.on_extract_progress)
+        self.extract_worker.finished.connect(self.on_extract_finished)
+        self.extract_worker.start()
+
+    def on_extract_progress(self, current, total):
+        self.extract_progress_bar.setMaximum(total)
+        self.extract_progress_bar.setValue(current)
+        self.extract_status_label.setText(f"{current}/{total}")
+
+    def on_extract_finished(self, success, payload):
+        self._set_extract_controls_enabled(True)
+        self.extract_start_btn.setStyleSheet("padding: 10px; background-color: #3b3b3b; color: white; border-radius: 5px;")
+        self.extract_progress_bar.setVisible(False)
+
+        if success:
+            message = f"{self.translations['images_extracted_success'].format(count=payload)}{self.extract_output_path}"
+            self.show_message(self.translations['success'], message)
+            self.reset_extract_state()
+        elif payload == "PDF_PASSWORD_PROTECTED":
+            self.show_message(self.translations['error'], self.translations['password_protected_error'])
+        elif payload == "NO_EMBEDDED_IMAGES":
+            self.show_message(self.translations['error'], self.translations['no_embedded_images_error'])
+        else:
+            self.show_message(self.translations['error'], f"{self.translations['conversion_failed']}{payload}")
+
+        self.extract_worker = None
+
+    def reset_extract_state(self):
+        self.extract_pdf_path = ""
+        self.extract_output_path = ""
+        self.update_button_states()
+        self.extract_status_label.setText("")
+
     def reset_state(self):
         self.pdf_path = ""
         self.save_path = ""
@@ -641,11 +1100,26 @@ class PDFToImageConverter(QMainWindow):
         self.setWindowTitle(self.translations['title'])
         self.tabs.setTabText(0, self.translations['tab1'])
         self.tabs.setTabText(1, self.translations['tab2'])
+        self.tabs.setTabText(2, self.translations['tab3'])
+        self.tabs.setTabText(3, self.translations['tab4'])
         self.upload_btn.setText(self.translations['select_pdf'])
         self.save_btn.setText(self.translations['select_output_folder'])
         self.process_btn.setText(self.translations['start_conversion'])
         self.select_images_btn.setText(self.translations['select_images'])
         self.convert_images_btn.setText(self.translations['convert_to_pdf'])
+        self.combine_options.setItemText(0, self.translations['convert_to_image'])
+        self.combine_options.setItemText(1, self.translations['merge_vertically'])
+        self.combine_options.setItemText(2, self.translations['merge_horizontally'])
+        self.compress_select_btn.setText(self.translations['select_pdf_to_compress'])
+        self.compress_output_btn.setText(self.translations['select_output_folder'])
+        self.compress_start_btn.setText(self.translations['start_compression'])
+        self.compression_level_options.setItemText(0, self.translations['compression_extreme'])
+        self.compression_level_options.setItemText(1, self.translations['compression_basic'])
+        self.compression_level_options.setItemText(2, self.translations['compression_balanced'])
+        self.compression_level_options.setItemText(3, self.translations['compression_high'])
+        self.extract_select_btn.setText(self.translations['select_pdf_to_extract'])
+        self.extract_output_btn.setText(self.translations['select_output_folder'])
+        self.extract_start_btn.setText(self.translations['start_extraction'])
         self.settings_action.setText(self.translations['menu_settings'])
         self.about_action.setText(self.translations['menu_about'])
         self.update_button_states()
@@ -653,7 +1127,7 @@ class PDFToImageConverter(QMainWindow):
     def closeEvent(self, event):
         # Arka planda çalışan bir dönüştürme varsa pencereyi kapatmadan önce bitmesini bekle;
         # aksi halde çalışan bir QThread yok edilirken çökme riski oluşur.
-        for worker in (self.pdf_worker, self.image_worker):
+        for worker in (self.pdf_worker, self.image_worker, self.compress_worker, self.extract_worker):
             if worker is not None and worker.isRunning():
                 worker.wait()
         event.accept()
