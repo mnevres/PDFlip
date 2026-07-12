@@ -107,7 +107,7 @@ translations = {
         'menu_about': 'About',
         'about_message': (
             '<b>Creator:</b> Mehmet Nevresoğlu<br>'
-            '<b>Contact:</b> <a href="mailto:mehmet.nvrs@gmail.com">mehmet.nvrs@gmail.com</a><br>'
+            '<b>Contact:</b> <a href="mailto:mehmet@nevresoglu.net">mehmet@nevresoglu.net</a><br>'
             '<b>LinkedIn:</b> <a href="https://www.linkedin.com/in/mehmet-nevresoglu-bb44341a/">Click here</a><br><br>'
             'You can use this program anywhere as long as you cite it as a reference. No license required.'
         ),
@@ -160,7 +160,7 @@ translations = {
         'menu_about': 'Hakkında',
         'about_message': (
             '<b>Geliştirici:</b> Mehmet Nevresoğlu<br>'
-            '<b>İletişim:</b> <a href="mailto:mehmet.nvrs@gmail.com">mehmet.nvrs@gmail.com</a><br>'
+            '<b>İletişim:</b> <a href="mailto:mehmet@nevresoglu.net">mehmet@nevresoglu.net</a><br>'
             '<b>LinkedIn:</b> <a href="https://www.linkedin.com/in/mehmet-nevresoglu-bb44341a/">Buraya tıklayın</a><br><br>'
             'Bu programı kaynak belirttiğiniz sürece her yerde kullanabilirsiniz. Lisans gerektirmez.'
         ),
