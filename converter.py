@@ -52,6 +52,10 @@ DEFAULT_LANGUAGE = 'en'
 # Büyük PDF'leri tek görselde birleştirirken kullanıcıyı uyarmak için sayfa eşiği
 LARGE_MERGE_PAGE_THRESHOLD = 150
 
+# Uygulama adı marka olduğu için dile göre çevrilmiyor.
+APP_NAME = "PDFlip"
+APP_VERSION = "1.1"
+
 
 def format_size(num_bytes):
     size = float(num_bytes)
@@ -63,7 +67,6 @@ def format_size(num_bytes):
 # Dil metinleri
 translations = {
     'en': {
-        'title': 'PDF & Image Converter',
         'tab1': 'PDF to Image',
         'tab2': 'Image to PDF',
         'select_pdf': 'Select PDF',
@@ -116,7 +119,6 @@ translations = {
         'language_turkish': 'Türkçe'
     },
     'tr': {
-        'title': 'PDF & Resim Dönüştürücü',
         'tab1': 'PDF\'den Resime Dönüştür',
         'tab2': 'Resimden PDF\'ye Dönüştür',
         'select_pdf': 'PDF Seç',
@@ -439,7 +441,7 @@ class PDFToImageConverter(QMainWindow):
         self.initUI()
 
     def initUI(self):
-        self.setWindowTitle(self.translations['title'])
+        self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -1097,7 +1099,7 @@ class PDFToImageConverter(QMainWindow):
         dialog.accept()
 
     def retranslate_ui(self):
-        self.setWindowTitle(self.translations['title'])
+        self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
         self.tabs.setTabText(0, self.translations['tab1'])
         self.tabs.setTabText(1, self.translations['tab2'])
         self.tabs.setTabText(2, self.translations['tab3'])
