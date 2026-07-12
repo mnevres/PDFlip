@@ -54,7 +54,7 @@ LARGE_MERGE_PAGE_THRESHOLD = 150
 
 # Uygulama adı marka olduğu için dile göre çevrilmiyor.
 APP_NAME = "PDFlip"
-APP_VERSION = "1.1"
+APP_VERSION = "1.0"
 
 
 def format_size(num_bytes):
