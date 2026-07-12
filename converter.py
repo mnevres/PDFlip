@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import logging
+from logging.handlers import RotatingFileHandler
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog, QLabel, QComboBox, QHBoxLayout,
     QMessageBox, QTabWidget, QMainWindow, QAction, QDialog, QProgressBar
@@ -26,12 +27,18 @@ def get_app_data_dir():
     return app_dir
 
 
-# Log dosyasını hemen yazılacak şekilde ayarlama
+# Log dosyası her açılışta silinmesin diye 1 MB'a ulaşınca döndürülüyor,
+# son 3 dosya saklanıyor; böylece önceki çalıştırmaların logu kaybolmuyor.
+_log_handler = RotatingFileHandler(
+    os.path.join(get_app_data_dir(), 'app.log'),
+    maxBytes=1_000_000,
+    backupCount=3,
+    encoding='utf-8'
+)
 logging.basicConfig(
-    filename=os.path.join(get_app_data_dir(), 'app.log'),
     level=logging.DEBUG,
     format='%(asctime)s %(levelname)s:%(message)s',
-    filemode='w',
+    handlers=[_log_handler],
     force=True
 )
 
