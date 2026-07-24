@@ -5,4 +5,9 @@ build/
 dist/
 Output/
 
+# MSIX build output and signing material -- never commit private keys.
+msix/package/
+msix/*.msix
+msix/*.pfx
+
 .claude/
