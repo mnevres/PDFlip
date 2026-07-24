@@ -43,11 +43,14 @@ logging.basicConfig(
     force=True
 )
 
-# Dil dosyası adı
-LANGUAGE_FILE = os.path.join(get_app_data_dir(), 'language.json')
+# Ayar dosyası (dil + tema)
+SETTINGS_FILE = os.path.join(get_app_data_dir(), 'settings.json')
 
 # Varsayılan dil İngilizce
 DEFAULT_LANGUAGE = 'en'
+
+# Varsayılan tema koyu
+DEFAULT_THEME = 'dark'
 
 # Büyük PDF'leri tek görselde birleştirirken kullanıcıyı uyarmak için sayfa eşiği
 LARGE_MERGE_PAGE_THRESHOLD = 150
@@ -55,6 +58,39 @@ LARGE_MERGE_PAGE_THRESHOLD = 150
 # Uygulama adı marka olduğu için dile göre çevrilmiyor.
 APP_NAME = "PDFlip"
 APP_VERSION = "1.0"
+
+THEMES = {
+    'dark': """
+        QMainWindow, QWidget { background-color: #202124; color: #e8eaed; }
+        QLabel { color: #e8eaed; }
+        QTabWidget::pane { border: 1px solid #3c4043; background-color: #202124; }
+        QTabBar::tab { background-color: #2d2e30; color: #e8eaed; padding: 8px 16px; }
+        QTabBar::tab:selected { background-color: #3c4043; }
+        QMenuBar { background-color: #202124; color: #e8eaed; }
+        QMenuBar::item:selected { background-color: #3c4043; }
+        QMenu { background-color: #2d2e30; color: #e8eaed; }
+        QMenu::item:selected { background-color: #3c4043; }
+        QDialog { background-color: #202124; color: #e8eaed; }
+        QProgressBar { background-color: #2d2e30; color: #e8eaed; border: 1px solid #3c4043; border-radius: 5px; text-align: center; }
+        QProgressBar::chunk { background-color: #77dd77; border-radius: 5px; }
+        QComboBox QAbstractItemView { background-color: #2d2e30; color: #e8eaed; selection-background-color: #3c4043; }
+    """,
+    'light': """
+        QMainWindow, QWidget { background-color: #f5f5f5; color: #1b1c1c; }
+        QLabel { color: #1b1c1c; }
+        QTabWidget::pane { border: 1px solid #d0d0d0; background-color: #f5f5f5; }
+        QTabBar::tab { background-color: #e8e8e8; color: #1b1c1c; padding: 8px 16px; }
+        QTabBar::tab:selected { background-color: #ffffff; }
+        QMenuBar { background-color: #f5f5f5; color: #1b1c1c; }
+        QMenuBar::item:selected { background-color: #d0d0d0; }
+        QMenu { background-color: #ffffff; color: #1b1c1c; }
+        QMenu::item:selected { background-color: #d0d0d0; }
+        QDialog { background-color: #f5f5f5; color: #1b1c1c; }
+        QProgressBar { background-color: #e8e8e8; color: #1b1c1c; border: 1px solid #d0d0d0; border-radius: 5px; text-align: center; }
+        QProgressBar::chunk { background-color: #77dd77; border-radius: 5px; }
+        QComboBox QAbstractItemView { background-color: #ffffff; color: #1b1c1c; selection-background-color: #d0d0d0; }
+    """,
+}
 
 
 def format_size(num_bytes):
@@ -116,7 +152,10 @@ translations = {
         ),
         'settings_language': 'Language',
         'language_english': 'English',
-        'language_turkish': 'Türkçe'
+        'language_turkish': 'Türkçe',
+        'settings_theme': 'Theme',
+        'theme_dark': 'Dark',
+        'theme_light': 'Light'
     },
     'tr': {
         'tab1': 'PDF\'den Resime Dönüştür',
@@ -168,25 +207,33 @@ translations = {
         ),
         'settings_language': 'Dil',
         'language_english': 'İngilizce',
-        'language_turkish': 'Türkçe'
+        'language_turkish': 'Türkçe',
+        'settings_theme': 'Tema',
+        'theme_dark': 'Koyu',
+        'theme_light': 'Açık'
     }
 }
 
 
-def load_language():
-    if os.path.exists(LANGUAGE_FILE):
+def load_settings_file():
+    if os.path.exists(SETTINGS_FILE):
         try:
-            with open(LANGUAGE_FILE, 'r') as file:
-                language = json.load(file).get('language', DEFAULT_LANGUAGE)
-                return language if language in translations else DEFAULT_LANGUAGE
+            with open(SETTINGS_FILE, 'r') as file:
+                data = json.load(file)
+                language = data.get('language', DEFAULT_LANGUAGE)
+                theme = data.get('theme', DEFAULT_THEME)
+                return (
+                    language if language in translations else DEFAULT_LANGUAGE,
+                    theme if theme in THEMES else DEFAULT_THEME,
+                )
         except (json.JSONDecodeError, OSError):
-            logging.warning("language.json could not be read, falling back to default language")
-    return DEFAULT_LANGUAGE
+            logging.warning("settings.json could not be read, falling back to defaults")
+    return DEFAULT_LANGUAGE, DEFAULT_THEME
 
 
-def save_language(language):
-    with open(LANGUAGE_FILE, 'w') as file:
-        json.dump({'language': language}, file)
+def save_settings_file(language, theme):
+    with open(SETTINGS_FILE, 'w') as file:
+        json.dump({'language': language, 'theme': theme}, file)
 
 
 class PdfToImageWorker(QThread):
@@ -432,7 +479,7 @@ class ImageExtractWorker(QThread):
 class PDFToImageConverter(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.language = load_language()
+        self.language, self.theme = load_settings_file()
         self.translations = translations[self.language]
         self.pdf_worker = None
         self.image_worker = None
@@ -440,8 +487,12 @@ class PDFToImageConverter(QMainWindow):
         self.extract_worker = None
         self.initUI()
 
+    def apply_theme(self):
+        QApplication.instance().setStyleSheet(THEMES[self.theme])
+
     def initUI(self):
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
+        self.apply_theme()
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -511,7 +562,6 @@ class PDFToImageConverter(QMainWindow):
 
         self.pdf_label = QLabel('', self)
         self.pdf_label.setFont(QFont("", 12))  # Bilgi etiketlerinin fontu 12
-        self.pdf_label.setStyleSheet("color: #1b1c1c;")
         self.pdf_to_image_layout.addWidget(self.pdf_label)
 
         self.save_btn = QPushButton(self.translations['select_output_folder'], self)
@@ -522,7 +572,6 @@ class PDFToImageConverter(QMainWindow):
 
         self.output_label = QLabel('', self)
         self.output_label.setFont(QFont("", 12))  # Bilgi etiketlerinin fontu 12
-        self.output_label.setStyleSheet("color: #1b1c1c;")
         self.pdf_to_image_layout.addWidget(self.output_label)
 
         self.combine_options = QComboBox(self)
@@ -554,7 +603,6 @@ class PDFToImageConverter(QMainWindow):
 
         self.status_label = QLabel('', self)
         self.status_label.setFont(font)
-        self.status_label.setStyleSheet("color: #1b1c1c;")
         self.pdf_to_image_layout.addWidget(self.status_label)
 
         self.pdf_to_image_tab.setLayout(self.pdf_to_image_layout)
@@ -574,7 +622,6 @@ class PDFToImageConverter(QMainWindow):
 
         self.images_label = QLabel('', self)
         self.images_label.setFont(QFont("", 12))  # Bilgi etiketlerinin fontu 12
-        self.images_label.setStyleSheet("color: #1b1c1c;")
         self.image_to_pdf_layout.addWidget(self.images_label)
 
         self.convert_images_btn = QPushButton(self.translations['convert_to_pdf'], self)
@@ -589,7 +636,6 @@ class PDFToImageConverter(QMainWindow):
 
         self.image_to_pdf_status_label = QLabel('', self)
         self.image_to_pdf_status_label.setFont(font)
-        self.image_to_pdf_status_label.setStyleSheet("color: #1b1c1c;")
         self.image_to_pdf_layout.addWidget(self.image_to_pdf_status_label)
 
         self.image_to_pdf_tab.setLayout(self.image_to_pdf_layout)
@@ -609,7 +655,6 @@ class PDFToImageConverter(QMainWindow):
 
         self.compress_pdf_label = QLabel('', self)
         self.compress_pdf_label.setFont(QFont("", 12))
-        self.compress_pdf_label.setStyleSheet("color: #1b1c1c;")
         self.compress_layout.addWidget(self.compress_pdf_label)
 
         self.compress_output_btn = QPushButton(self.translations['select_output_folder'], self)
@@ -620,7 +665,6 @@ class PDFToImageConverter(QMainWindow):
 
         self.compress_output_label = QLabel('', self)
         self.compress_output_label.setFont(QFont("", 12))
-        self.compress_output_label.setStyleSheet("color: #1b1c1c;")
         self.compress_layout.addWidget(self.compress_output_label)
 
         self.compression_level_options = QComboBox(self)
@@ -646,7 +690,6 @@ class PDFToImageConverter(QMainWindow):
 
         self.compress_status_label = QLabel('', self)
         self.compress_status_label.setFont(font)
-        self.compress_status_label.setStyleSheet("color: #1b1c1c;")
         self.compress_layout.addWidget(self.compress_status_label)
 
         self.compress_pdf_tab.setLayout(self.compress_layout)
@@ -666,7 +709,6 @@ class PDFToImageConverter(QMainWindow):
 
         self.extract_pdf_label = QLabel('', self)
         self.extract_pdf_label.setFont(QFont("", 12))
-        self.extract_pdf_label.setStyleSheet("color: #1b1c1c;")
         self.extract_layout.addWidget(self.extract_pdf_label)
 
         self.extract_output_btn = QPushButton(self.translations['select_output_folder'], self)
@@ -677,7 +719,6 @@ class PDFToImageConverter(QMainWindow):
 
         self.extract_output_label = QLabel('', self)
         self.extract_output_label.setFont(QFont("", 12))
-        self.extract_output_label.setStyleSheet("color: #1b1c1c;")
         self.extract_layout.addWidget(self.extract_output_label)
 
         self.extract_start_btn = QPushButton(self.translations['start_extraction'], self)
@@ -692,7 +733,6 @@ class PDFToImageConverter(QMainWindow):
 
         self.extract_status_label = QLabel('', self)
         self.extract_status_label.setFont(font)
-        self.extract_status_label.setStyleSheet("color: #1b1c1c;")
         self.extract_layout.addWidget(self.extract_status_label)
 
         self.extract_images_tab.setLayout(self.extract_layout)
@@ -1083,18 +1123,29 @@ class PDFToImageConverter(QMainWindow):
         language_combo.setCurrentIndex(0 if self.language == 'en' else 1)
         layout.addWidget(language_combo)
 
+        theme_label = QLabel(self.translations['settings_theme'])
+        layout.addWidget(theme_label)
+
+        theme_combo = QComboBox()
+        theme_combo.addItem(self.translations['theme_dark'], 'dark')
+        theme_combo.addItem(self.translations['theme_light'], 'light')
+        theme_combo.setCurrentIndex(0 if self.theme == 'dark' else 1)
+        layout.addWidget(theme_combo)
+
         save_button = QPushButton(self.translations['save'])
-        save_button.clicked.connect(lambda: self.save_settings(language_combo.currentData(), settings_dialog))
+        save_button.clicked.connect(lambda: self.save_settings(language_combo.currentData(), theme_combo.currentData(), settings_dialog))
         layout.addWidget(save_button)
 
         settings_dialog.setLayout(layout)
-        settings_dialog.resize(300, 150)
+        settings_dialog.resize(300, 200)
         settings_dialog.exec_()
 
-    def save_settings(self, language, dialog):
+    def save_settings(self, language, theme, dialog):
         self.language = language
-        save_language(language)
+        self.theme = theme
+        save_settings_file(language, theme)
         self.translations = translations[self.language]
+        self.apply_theme()
         self.retranslate_ui()
         dialog.accept()
 
