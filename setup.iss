@@ -37,7 +37,7 @@ DisableProgramGroupPage=yes
 ; Remove the following line to run in administrative install mode (install for all users.)
 PrivilegesRequired=lowest
 OutputDir={#SourcePath}\Output
-OutputBaseFilename=PDFlip Setup
+OutputBaseFilename=PDFlip-{#MyAppVersion}-Setup
 SetupIconFile={#SourcePath}\icon.ico
 Compression=lzma
 SolidCompression=yes
