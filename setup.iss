@@ -39,6 +39,7 @@ PrivilegesRequired=lowest
 OutputDir={#SourcePath}\Output
 OutputBaseFilename=PDFlip-{#MyAppVersion}-Setup
 SetupIconFile={#SourcePath}\icon.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
