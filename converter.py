@@ -7,7 +7,8 @@ import ctypes
 from logging.handlers import RotatingFileHandler
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog, QLabel, QComboBox, QHBoxLayout,
-    QMessageBox, QTabWidget, QMainWindow, QAction, QDialog, QProgressBar, QGraphicsDropShadowEffect, QFrame
+    QMessageBox, QTabWidget, QMainWindow, QAction, QDialog, QProgressBar, QGraphicsDropShadowEffect, QFrame,
+    QStyledItemDelegate
 )
 from PyQt5.QtGui import QFont, QIcon, QColor
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
@@ -110,7 +111,7 @@ JPEG_MAX_DIMENSION = 65500
 
 # Uygulama adı marka olduğu için dile göre çevrilmiyor.
 APP_NAME = "PDFlip"
-APP_VERSION = "1.0"
+APP_VERSION = "1.1"
 
 THEMES = {
     'dark': f"""
@@ -846,6 +847,30 @@ class ImageExtractWorker(QThread):
                 doc.close()
 
 
+class ComboBoxItemDelegate(QStyledItemDelegate):
+    """QComboBox açılır listesindeki öğeler için QSS'teki min-height/padding Qt'nin
+    varsayılan delegate'i tarafından yok sayılıyor (satır yüksekliği stylesheet'ten değil
+    font metriklerinden hesaplanıyor) -- bu yüzden yüksekliği burada elle zorluyoruz."""
+    def __init__(self, parent=None, item_height=56):
+        super().__init__(parent)
+        self.item_height = item_height
+
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        size.setHeight(self.item_height)
+        return size
+
+
+class DropdownComboBox(QComboBox):
+    """Varsayılan QComboBox popup'ı, açılırken seçili öğeyi butonun üzerine hizalamaya
+    çalışır -- bu da alta değil üstüne/kaymalı açılmasına yol açar. Burada popup'ı her
+    zaman kutunun hemen altına, standart bir menü gibi zorluyoruz."""
+    def showPopup(self):
+        super().showPopup()
+        popup = self.view().window()
+        popup.move(self.mapToGlobal(self.rect().bottomLeft()))
+
+
 class PDFToImageConverter(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -949,16 +974,18 @@ class PDFToImageConverter(QMainWindow):
         self.output_label.setFont(QFont("", 12))  # Bilgi etiketlerinin fontu 12
         self.pdf_to_image_layout.addWidget(self.output_label)
 
-        self.combine_options = QComboBox(self)
+        self.combine_options = DropdownComboBox(self)
         self.combine_options.setFont(font)
+        self.combine_options.setItemDelegate(ComboBoxItemDelegate(self.combine_options))
         self.combine_options.addItem(self.translations['convert_to_image'], 'single')
         self.combine_options.addItem(self.translations['merge_vertically'], 'vertical')
         self.combine_options.addItem(self.translations['merge_horizontally'], 'horizontal')
         self.combine_options.currentIndexChanged.connect(self.clear_status)
         self.pdf_to_image_layout.addWidget(self.combine_options)
 
-        self.file_type_options = QComboBox(self)
+        self.file_type_options = DropdownComboBox(self)
         self.file_type_options.setFont(font)
+        self.file_type_options.setItemDelegate(ComboBoxItemDelegate(self.file_type_options))
         self.file_type_options.addItem("PNG")
         self.file_type_options.addItem("JPG")
         self.file_type_options.currentIndexChanged.connect(self.clear_status)
@@ -1050,8 +1077,9 @@ class PDFToImageConverter(QMainWindow):
         self.compress_output_label.setFont(QFont("", 12))
         self.compress_layout.addWidget(self.compress_output_label)
 
-        self.compression_level_options = QComboBox(self)
+        self.compression_level_options = DropdownComboBox(self)
         self.compression_level_options.setFont(font)
+        self.compression_level_options.setItemDelegate(ComboBoxItemDelegate(self.compression_level_options))
         self.compression_level_options.addItem(self.translations['compression_extreme'], 'extreme')
         self.compression_level_options.addItem(self.translations['compression_basic'], 'basic')
         self.compression_level_options.addItem(self.translations['compression_balanced'], 'balanced')
@@ -1588,7 +1616,8 @@ class PDFToImageConverter(QMainWindow):
         language_label = QLabel(self.translations['settings_language'])
         language_label.setStyleSheet("background: transparent; font-weight: 600; font-size: 13px; color: #94a3b8;" if self.theme == 'dark' else "background: transparent; font-weight: 600; font-size: 13px; color: #64748b;")
 
-        language_combo = QComboBox()
+        language_combo = DropdownComboBox()
+        language_combo.setItemDelegate(ComboBoxItemDelegate(language_combo))
         language_combo.addItem(self.translations['language_english'], 'en')
         language_combo.addItem(self.translations['language_turkish'], 'tr')
         language_combo.setCurrentIndex(0 if self.language == 'en' else 1)
@@ -1602,7 +1631,8 @@ class PDFToImageConverter(QMainWindow):
         theme_label = QLabel(self.translations['settings_theme'])
         theme_label.setStyleSheet("background: transparent; font-weight: 600; font-size: 13px; color: #94a3b8;" if self.theme == 'dark' else "background: transparent; font-weight: 600; font-size: 13px; color: #64748b;")
 
-        theme_combo = QComboBox()
+        theme_combo = DropdownComboBox()
+        theme_combo.setItemDelegate(ComboBoxItemDelegate(theme_combo))
         theme_combo.addItem(self.translations['theme_dark'], 'dark')
         theme_combo.addItem(self.translations['theme_light'], 'light')
         theme_combo.setCurrentIndex(0 if self.theme == 'dark' else 1)
@@ -1684,6 +1714,9 @@ if __name__ == "__main__":
         QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
 
         app = QApplication(sys.argv)
+        # Windows'un yerel stili (windowsvista) bazı QSS özelliklerini (padding, border-radius, vb.)
+        # tutarsız uyguluyor; Fusion tüm platformlarda aynı, öngörülebilir şekilde render ediyor.
+        app.setStyle("Fusion")
         app.setWindowIcon(QIcon(resource_path("icon.ico")))  # Set app icon
 
         ex = PDFToImageConverter()

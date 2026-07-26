@@ -8,7 +8,7 @@
   <Identity
     Name="MehmetNevresolu.PDFlip"
     Publisher="CN=B4F47516-0976-434F-9D98-BCE3032ECA19"
-    Version="1.0.0.0"
+    Version="1.1.0.0"
     ProcessorArchitecture="x64" />
 
   <Properties>
