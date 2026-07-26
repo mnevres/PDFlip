@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/mnevres/PDFlip/main/icon.png" alt="PDFlip Icon" width="128" />
+  <img src="https://raw.githubusercontent.com/mnevres/PDFnest/main/icon.png" alt="PDFnest Icon" width="128" />
 
-  <h1>PDFlip</h1>
+  <h1>PDFnest</h1>
   <p>Free and simple desktop PDF toolkit.</p>
   <p>
     <a href="#-english">English</a>
@@ -16,7 +16,7 @@
 
 ## English
 
-**PDFlip** is a free and easy-to-use desktop application for working with PDFs: convert pages to images, merge images into a PDF, shrink a PDF's file size, or pull out the images embedded inside a PDF.
+**PDFnest** is a free and easy-to-use desktop application for working with PDFs: convert pages to images, merge images into a PDF, shrink a PDF's file size, or pull out the images embedded inside a PDF.
 
 Designed for efficiency, this tool helps you manage your documents quickly without needing complex software. It runs fully offline — nothing is ever uploaded anywhere.
 
@@ -39,7 +39,7 @@ Designed for efficiency, this tool helps you manage your documents quickly witho
 
 You can safely download the latest version of the program from the link below. The setup file allows you to easily install the program on your computer.
 
-[**>> Download the Latest Version <<**](https://github.com/mnevres/PDFlip/releases/latest)
+[**>> Download the Latest Version <<**](https://github.com/mnevres/PDFnest/releases/latest)
 
 ## Feedback and Support
 
@@ -51,8 +51,8 @@ Your feedback, suggestions, or any bugs you encounter are very valuable to me. Y
 * **For Bug Reports and Technical Requests (Recommended):**
     The most effective way to report a bug with details or to request a new feature is by using the "Issues" section on the project's GitHub page.
 
-    * **Bug Report for PDFlip:**
-        [» PDFlip Issues Page](https://github.com/mnevres/PDFlip/issues)
+    * **Bug Report for PDFnest:**
+        [» PDFnest Issues Page](https://github.com/mnevres/PDFnest/issues)
 
 ---
 
@@ -60,7 +60,7 @@ Your feedback, suggestions, or any bugs you encounter are very valuable to me. Y
 
 ## 🇹🇷 Türkçe
 
-**PDFlip**, PDF'lerle çalışmanızı sağlayan ücretsiz ve kullanımı kolay bir masaüstü uygulamasıdır: sayfaları resme dönüştürün, resimleri bir PDF'te birleştirin, bir PDF'in dosya boyutunu küçültün ya da içine gömülü resimleri dışarı çıkarın.
+**PDFnest**, PDF'lerle çalışmanızı sağlayan ücretsiz ve kullanımı kolay bir masaüstü uygulamasıdır: sayfaları resme dönüştürün, resimleri bir PDF'te birleştirin, bir PDF'in dosya boyutunu küçültün ya da içine gömülü resimleri dışarı çıkarın.
 
 Verimlilik için tasarlanan bu araç, karmaşık yazılımlara ihtiyaç duymadan belgelerinizi hızla yönetmenize yardımcı olur. Tamamen çevrimdışı çalışır — hiçbir veri hiçbir yere gönderilmez.
 
@@ -83,7 +83,7 @@ Verimlilik için tasarlanan bu araç, karmaşık yazılımlara ihtiyaç duymadan
 
 Programın en güncel sürümünü aşağıdaki bağlantıdan güvenle indirebilirsiniz. Kurulum dosyası, programı bilgisayarınıza kolayca kurmanızı sağlar.
 
-[**>> En Son Sürümü İndir <<**](https://github.com/mnevres/PDFlip/releases/latest)
+[**>> En Son Sürümü İndir <<**](https://github.com/mnevres/PDFnest/releases/latest)
 
 ### Geri Bildirim ve Destek
 
@@ -95,8 +95,8 @@ Programla ilgili görüşleriniz, önerileriniz veya karşılaştığınız hata
 * **Hata Bildirimi ve Teknik Talepler İçin (Tavsiye Edilen):**
     Karşılaştığınız bir hatayı detaylarıyla bildirmek veya yeni bir özellik talep etmek için en etkili yöntem, projenin GitHub sayfasındaki "Issues" bölümünü kullanmaktır.
 
-    * **PDFlip için Hata Bildirimi:**
-        [» PDFlip Issues Sayfası](https://github.com/mnevres/PDFlip/issues)
+    * **PDFnest için Hata Bildirimi:**
+        [» PDFnest Issues Sayfası](https://github.com/mnevres/PDFnest/issues)
 
 ---
 

@@ -110,7 +110,7 @@ LARGE_MERGE_PAGE_THRESHOLD = 150
 JPEG_MAX_DIMENSION = 65500
 
 # Uygulama adı marka olduğu için dile göre çevrilmiyor.
-APP_NAME = "PDFlip"
+APP_NAME = "PDFnest"
 APP_VERSION = "1.1"
 
 THEMES = {

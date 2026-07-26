@@ -63,7 +63,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="PDFlip",
+    name="PDFnest",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
