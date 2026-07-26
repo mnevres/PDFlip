@@ -7,7 +7,7 @@ import ctypes
 from logging.handlers import RotatingFileHandler
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog, QLabel, QComboBox, QHBoxLayout,
-    QMessageBox, QTabWidget, QMainWindow, QAction, QDialog, QProgressBar, QGraphicsDropShadowEffect
+    QMessageBox, QTabWidget, QMainWindow, QAction, QDialog, QProgressBar, QGraphicsDropShadowEffect, QFrame
 )
 from PyQt5.QtGui import QFont, QIcon, QColor
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
@@ -367,7 +367,8 @@ translations = {
         'warning': 'Warning',
         'conversion_successful': 'Conversion successful!',
         'conversion_failed': 'Conversion failed: ',
-        'select_pdf_error': 'Please select a PDF file and an output folder.',
+        'select_pdf_file_error': 'Please select a PDF file.',
+        'select_output_folder_error': 'Please select an output folder.',
         'select_image_folder_error': 'Please select one or more images.',
         'no_images_found_error': 'No images found in the selected folder.',
         'pdf_created_success': 'PDF created successfully: ',
@@ -379,6 +380,7 @@ translations = {
         'output_folder_prefix': 'Output Folder: ',
         'selected_folder_prefix': 'Selected Folder: ',
         'save': 'Save',
+        'open_folder': 'Open Folder',
         'tab3': 'Compress PDF',
         'tab4': 'Extract Images',
         'select_pdf_to_compress': 'Select PDF to Compress',
@@ -425,7 +427,8 @@ translations = {
         'warning': 'Uyarı',
         'conversion_successful': 'Dönüştürme başarılı!',
         'conversion_failed': 'Dönüştürme başarısız: ',
-        'select_pdf_error': 'Lütfen bir PDF dosyası ve bir çıktı klasörü seçin.',
+        'select_pdf_file_error': 'Lütfen bir PDF dosyası seçin.',
+        'select_output_folder_error': 'Lütfen bir çıktı klasörü seçin.',
         'select_image_folder_error': 'Lütfen en az bir resim seçin.',
         'no_images_found_error': 'Seçilen klasörde resim bulunamadı.',
         'pdf_created_success': 'PDF başarıyla oluşturuldu: ',
@@ -437,6 +440,7 @@ translations = {
         'output_folder_prefix': 'Çıktı Klasörü: ',
         'selected_folder_prefix': 'Seçilen Klasör: ',
         'save': 'Kaydet',
+        'open_folder': 'Klasörü Aç',
         'tab3': 'PDF Sıkıştır',
         'tab4': 'Resimleri Çıkar',
         'select_pdf_to_compress': 'Sıkıştırılacak PDF Seç',
@@ -469,45 +473,66 @@ translations = {
 }
 
 
-class ToastNotification(QLabel):
-    """Sıkıntısız, OK butonuna tıklama gerektirmeyen floating toast bildirimi."""
-    def __init__(self, parent, message, duration=3800):
+class ToastNotification(QFrame):
+    """Sıkıntısız, OK butonuna tıklama gerektirmeyen, pencerenin ortasında beliren toast bildirimi."""
+    def __init__(self, parent, message, folder_to_open=None, open_folder_text='', duration=None):
         super().__init__(parent)
         self.setAttribute(Qt.WA_DeleteOnClose)
-        self.setText(f"  ✔  {message}")
-        self.setWordWrap(True)
         self.setStyleSheet("""
-            QLabel {
+            QFrame {
                 background-color: #1e293b;
-                color: #4ade80;
                 border: 1px solid #22c55e;
                 border-radius: 12px;
-                padding: 12px 24px;
-                font-weight: bold;
-                font-size: 13px;
             }
         """)
 
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(20, 14, 14, 14)
+        layout.setSpacing(16)
+
+        label = QLabel(f"✔  {message}")
+        label.setWordWrap(True)
+        label.setStyleSheet("background: transparent; border: none; color: #4ade80; font-weight: bold; font-size: 13px;")
+        layout.addWidget(label, 1)
+
+        if folder_to_open:
+            open_btn = QPushButton(open_folder_text)
+            open_btn.setCursor(Qt.PointingHandCursor)
+            open_btn.setStyleSheet("""
+                QPushButton { background-color: #22c55e; color: #0f172a; border: none; border-radius: 6px; padding: 6px 14px; font-weight: bold; }
+                QPushButton:hover { background-color: #4ade80; }
+            """)
+            open_btn.clicked.connect(lambda: self._open_folder(folder_to_open))
+            layout.addWidget(open_btn)
+
         shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(20)
+        shadow.setBlurRadius(24)
         shadow.setColor(QColor(0, 0, 0, 180))
         shadow.setOffset(0, 4)
         self.setGraphicsEffect(shadow)
 
         self.adjustSize()
-        max_w = max(200, parent.width() - 60)
+        max_w = max(240, parent.width() - 60)
         if self.width() > max_w:
             self.setFixedWidth(max_w)
             self.adjustSize()
 
         parent_rect = parent.rect()
         x = (parent_rect.width() - self.width()) // 2
-        y = parent_rect.height() - self.height() - 35
+        y = (parent_rect.height() - self.height()) // 2
         self.move(x, y)
         self.show()
         self.raise_()
 
+        if duration is None:
+            duration = 5500 if folder_to_open else 3800
         QTimer.singleShot(duration, self.close)
+
+    def _open_folder(self, path):
+        try:
+            os.startfile(path)
+        except OSError as e:
+            logging.warning(f"Could not open folder {path}: {e}")
 
 
 def load_settings_file():
@@ -518,19 +543,27 @@ def load_settings_file():
                 language = data.get('language', DEFAULT_LANGUAGE)
                 theme = data.get('theme', DEFAULT_THEME)
                 last_output_dir = data.get('last_output_dir', '')
-                valid_dir = last_output_dir if last_output_dir and os.path.isdir(last_output_dir) else ''
+                last_input_dir = data.get('last_input_dir', '')
+                valid_output_dir = last_output_dir if last_output_dir and os.path.isdir(last_output_dir) else ''
+                valid_input_dir = last_input_dir if last_input_dir and os.path.isdir(last_input_dir) else ''
                 return (
                     language if language in translations else DEFAULT_LANGUAGE,
                     theme if theme in THEMES else DEFAULT_THEME,
-                    valid_dir
+                    valid_output_dir,
+                    valid_input_dir
                 )
         except (json.JSONDecodeError, OSError):
             logging.warning("settings.json could not be read, falling back to defaults")
-    return DEFAULT_LANGUAGE, DEFAULT_THEME, ''
+    return DEFAULT_LANGUAGE, DEFAULT_THEME, '', ''
 
 
-def save_settings_file(language, theme, last_output_dir=''):
-    data = {'language': language, 'theme': theme, 'last_output_dir': last_output_dir}
+def save_settings_file(language, theme, last_output_dir='', last_input_dir=''):
+    data = {
+        'language': language,
+        'theme': theme,
+        'last_output_dir': last_output_dir,
+        'last_input_dir': last_input_dir,
+    }
     with open(SETTINGS_FILE, 'w') as file:
         json.dump(data, file)
 
@@ -778,7 +811,7 @@ class ImageExtractWorker(QThread):
 class PDFToImageConverter(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.language, self.theme, self.last_output_dir = load_settings_file()
+        self.language, self.theme, self.last_output_dir, self.last_input_dir = load_settings_file()
         self.translations = translations[self.language]
         self.pdf_worker = None
         self.image_worker = None
@@ -1108,10 +1141,15 @@ class PDFToImageConverter(QMainWindow):
 
     def upload_pdf(self):
         options = QFileDialog.Options()
-        self.pdf_path, _ = QFileDialog.getOpenFileName(self, self.translations['select_pdf'], "", "PDF Files (*.pdf);;All Files (*)", options=options)
-        self.update_button_states()
-        self.clear_status()
-        logging.debug(f"PDF selected: {self.pdf_path}")
+        initial_dir = self.last_input_dir if (self.last_input_dir and os.path.isdir(self.last_input_dir)) else ""
+        chosen, _ = QFileDialog.getOpenFileName(self, self.translations['select_pdf'], initial_dir, "PDF Files (*.pdf);;All Files (*)", options=options)
+        if chosen:
+            self.pdf_path = chosen
+            self.last_input_dir = os.path.dirname(chosen)
+            save_settings_file(self.language, self.theme, self.last_output_dir, self.last_input_dir)
+            self.update_button_states()
+            self.clear_status()
+            logging.debug(f"PDF selected: {self.pdf_path}")
 
     def save_location(self):
         options = QFileDialog.Options()
@@ -1120,7 +1158,7 @@ class PDFToImageConverter(QMainWindow):
         if chosen:
             self.save_path = chosen
             self.last_output_dir = chosen
-            save_settings_file(self.language, self.theme, self.last_output_dir)
+            save_settings_file(self.language, self.theme, self.last_output_dir, self.last_input_dir)
             self.update_button_states()
             self.clear_status()
             logging.debug(f"Output folder selected: {self.save_path}")
@@ -1133,9 +1171,14 @@ class PDFToImageConverter(QMainWindow):
         self.process_btn.setEnabled(enabled)
 
     def process_pdf(self):
-        if not self.pdf_path or not self.save_path:
-            self.show_message(self.translations['error'], self.translations['select_pdf_error'])
-            logging.error("PDF file or output folder not selected")
+        if not self.pdf_path:
+            self.show_message(self.translations['error'], self.translations['select_pdf_file_error'])
+            logging.error("PDF file not selected")
+            return
+
+        if not self.save_path:
+            self.show_message(self.translations['error'], self.translations['select_output_folder_error'])
+            logging.error("Output folder not selected")
             return
 
         if self.pdf_worker is not None and self.pdf_worker.isRunning():
@@ -1178,8 +1221,8 @@ class PDFToImageConverter(QMainWindow):
         self.pdf_worker.finished.connect(self.on_pdf_conversion_finished)
         self.pdf_worker.start()
 
-    def show_toast(self, message):
-        ToastNotification(self, message)
+    def show_toast(self, message, folder_to_open=None):
+        ToastNotification(self, message, folder_to_open=folder_to_open, open_folder_text=self.translations['open_folder'])
 
     def on_pdf_progress(self, current, total):
         self.pdf_progress_bar.setMaximum(total)
@@ -1192,7 +1235,7 @@ class PDFToImageConverter(QMainWindow):
         self.pdf_progress_bar.setVisible(False)
 
         if success:
-            self.show_toast(self.translations['conversion_successful'])
+            self.show_toast(self.translations['conversion_successful'], folder_to_open=self.save_path)
             self.reset_state()
         elif error_message == "PDF_PASSWORD_PROTECTED":
             self.show_message(self.translations['error'], self.translations['password_protected_error'])
@@ -1212,7 +1255,7 @@ class PDFToImageConverter(QMainWindow):
             if not self.image_save_path:
                 self.image_save_path = os.path.dirname(files[0])
                 self.last_output_dir = self.image_save_path
-                save_settings_file(self.language, self.theme, self.last_output_dir)
+                save_settings_file(self.language, self.theme, self.last_output_dir, self.last_input_dir)
             self.update_button_states()
             if len(files) == 1:
                 self.images_label.setText(f"{self.translations['selected_images_prefix']}{os.path.basename(files[0])}")
@@ -1229,7 +1272,7 @@ class PDFToImageConverter(QMainWindow):
         if chosen:
             self.image_save_path = chosen
             self.last_output_dir = chosen
-            save_settings_file(self.language, self.theme, self.last_output_dir)
+            save_settings_file(self.language, self.theme, self.last_output_dir, self.last_input_dir)
             self.update_button_states()
             logging.debug(f"Image to PDF output folder selected: {self.image_save_path}")
 
@@ -1245,7 +1288,7 @@ class PDFToImageConverter(QMainWindow):
             return
 
         if not self.image_save_path:
-            self.show_message(self.translations['error'], self.translations['select_pdf_error'])
+            self.show_message(self.translations['error'], self.translations['select_output_folder_error'])
             logging.error("Output folder not selected for Image to PDF")
             return
 
@@ -1276,7 +1319,7 @@ class PDFToImageConverter(QMainWindow):
         self.image_progress_bar.setVisible(False)
 
         if success:
-            self.show_toast(f"{self.translations['pdf_created_success']}{pdf_path}")
+            self.show_toast(f"{self.translations['pdf_created_success']}{pdf_path}", folder_to_open=self.image_save_path)
             self.reset_state()
         else:
             self.show_message(self.translations['error'], f"{self.translations['conversion_failed']}{error_message}")
@@ -1285,10 +1328,15 @@ class PDFToImageConverter(QMainWindow):
 
     def select_compress_pdf(self):
         options = QFileDialog.Options()
-        self.compress_pdf_path, _ = QFileDialog.getOpenFileName(self, self.translations['select_pdf_to_compress'], "", "PDF Files (*.pdf);;All Files (*)", options=options)
-        self.update_button_states()
-        self.clear_compress_status()
-        logging.debug(f"PDF selected for compression: {self.compress_pdf_path}")
+        initial_dir = self.last_input_dir if (self.last_input_dir and os.path.isdir(self.last_input_dir)) else ""
+        chosen, _ = QFileDialog.getOpenFileName(self, self.translations['select_pdf_to_compress'], initial_dir, "PDF Files (*.pdf);;All Files (*)", options=options)
+        if chosen:
+            self.compress_pdf_path = chosen
+            self.last_input_dir = os.path.dirname(chosen)
+            save_settings_file(self.language, self.theme, self.last_output_dir, self.last_input_dir)
+            self.update_button_states()
+            self.clear_compress_status()
+            logging.debug(f"PDF selected for compression: {self.compress_pdf_path}")
 
     def select_compress_output(self):
         options = QFileDialog.Options()
@@ -1297,7 +1345,7 @@ class PDFToImageConverter(QMainWindow):
         if chosen:
             self.compress_output_path = chosen
             self.last_output_dir = chosen
-            save_settings_file(self.language, self.theme, self.last_output_dir)
+            save_settings_file(self.language, self.theme, self.last_output_dir, self.last_input_dir)
             self.update_button_states()
             self.clear_compress_status()
             logging.debug(f"Output folder selected for compression: {self.compress_output_path}")
@@ -1312,9 +1360,14 @@ class PDFToImageConverter(QMainWindow):
         self.compress_start_btn.setEnabled(enabled)
 
     def process_compress_pdf(self):
-        if not self.compress_pdf_path or not self.compress_output_path:
-            self.show_message(self.translations['error'], self.translations['select_pdf_error'])
-            logging.error("PDF file or output folder not selected for compression")
+        if not self.compress_pdf_path:
+            self.show_message(self.translations['error'], self.translations['select_pdf_file_error'])
+            logging.error("PDF file not selected for compression")
+            return
+
+        if not self.compress_output_path:
+            self.show_message(self.translations['error'], self.translations['select_output_folder_error'])
+            logging.error("Output folder not selected for compression")
             return
 
         if self.compress_worker is not None and self.compress_worker.isRunning():
@@ -1350,7 +1403,7 @@ class PDFToImageConverter(QMainWindow):
             message = self.translations['compression_successful'].format(
                 before=format_size(before), after=format_size(after), percent=percent
             )
-            self.show_toast(message)
+            self.show_toast(message, folder_to_open=self.compress_output_path)
             self.reset_compress_state()
         elif payload == "PDF_PASSWORD_PROTECTED":
             self.show_message(self.translations['error'], self.translations['password_protected_error'])
@@ -1367,10 +1420,15 @@ class PDFToImageConverter(QMainWindow):
 
     def select_extract_pdf(self):
         options = QFileDialog.Options()
-        self.extract_pdf_path, _ = QFileDialog.getOpenFileName(self, self.translations['select_pdf_to_extract'], "", "PDF Files (*.pdf);;All Files (*)", options=options)
-        self.update_button_states()
-        self.clear_extract_status()
-        logging.debug(f"PDF selected for image extraction: {self.extract_pdf_path}")
+        initial_dir = self.last_input_dir if (self.last_input_dir and os.path.isdir(self.last_input_dir)) else ""
+        chosen, _ = QFileDialog.getOpenFileName(self, self.translations['select_pdf_to_extract'], initial_dir, "PDF Files (*.pdf);;All Files (*)", options=options)
+        if chosen:
+            self.extract_pdf_path = chosen
+            self.last_input_dir = os.path.dirname(chosen)
+            save_settings_file(self.language, self.theme, self.last_output_dir, self.last_input_dir)
+            self.update_button_states()
+            self.clear_extract_status()
+            logging.debug(f"PDF selected for image extraction: {self.extract_pdf_path}")
 
     def select_extract_output(self):
         options = QFileDialog.Options()
@@ -1379,7 +1437,7 @@ class PDFToImageConverter(QMainWindow):
         if chosen:
             self.extract_output_path = chosen
             self.last_output_dir = chosen
-            save_settings_file(self.language, self.theme, self.last_output_dir)
+            save_settings_file(self.language, self.theme, self.last_output_dir, self.last_input_dir)
             self.update_button_states()
             self.clear_extract_status()
             logging.debug(f"Output folder selected for image extraction: {self.extract_output_path}")
@@ -1393,9 +1451,14 @@ class PDFToImageConverter(QMainWindow):
         self.extract_start_btn.setEnabled(enabled)
 
     def process_extract_images(self):
-        if not self.extract_pdf_path or not self.extract_output_path:
-            self.show_message(self.translations['error'], self.translations['select_pdf_error'])
-            logging.error("PDF file or output folder not selected for image extraction")
+        if not self.extract_pdf_path:
+            self.show_message(self.translations['error'], self.translations['select_pdf_file_error'])
+            logging.error("PDF file not selected for image extraction")
+            return
+
+        if not self.extract_output_path:
+            self.show_message(self.translations['error'], self.translations['select_output_folder_error'])
+            logging.error("Output folder not selected for image extraction")
             return
 
         if self.extract_worker is not None and self.extract_worker.isRunning():
@@ -1424,7 +1487,7 @@ class PDFToImageConverter(QMainWindow):
 
         if success:
             message = f"{self.translations['images_extracted_success'].format(count=payload)}{self.extract_output_path}"
-            self.show_toast(message)
+            self.show_toast(message, folder_to_open=self.extract_output_path)
             self.reset_extract_state()
         elif payload == "PDF_PASSWORD_PROTECTED":
             self.show_message(self.translations['error'], self.translations['password_protected_error'])
@@ -1528,7 +1591,7 @@ class PDFToImageConverter(QMainWindow):
     def save_settings(self, language, theme, dialog):
         self.language = language
         self.theme = theme
-        save_settings_file(language, theme, self.last_output_dir)
+        save_settings_file(language, theme, self.last_output_dir, self.last_input_dir)
         self.translations = translations[self.language]
         self.apply_theme()
         self.retranslate_ui()
