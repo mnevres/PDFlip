@@ -3,21 +3,16 @@ import os
 import io
 import json
 import logging
+import ctypes
 from logging.handlers import RotatingFileHandler
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog, QLabel, QComboBox, QHBoxLayout,
-    QMessageBox, QTabWidget, QMainWindow, QAction, QDialog, QProgressBar
+    QMessageBox, QTabWidget, QMainWindow, QAction, QDialog, QProgressBar, QGraphicsDropShadowEffect
 )
-from PyQt5.QtGui import QFont, QIcon
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QFont, QIcon, QColor
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 import fitz  # PyMuPDF
-from PIL import Image
-
-
-def resource_path(relative_path):
-    """PyInstaller ile paketlendiğinde geçici çıkarma klasörünü, geliştirme ortamında script klasörünü döndürür."""
-    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base_path, relative_path)
+from PIL import Image, ImageDraw
 
 
 def get_app_data_dir():
@@ -26,6 +21,60 @@ def get_app_data_dir():
     app_dir = os.path.join(base, 'MN PDF Converter')
     os.makedirs(app_dir, exist_ok=True)
     return app_dir
+
+
+def ensure_arrow_icons():
+    dark_path = os.path.join(get_app_data_dir(), 'arrow_dark.png')
+    light_path = os.path.join(get_app_data_dir(), 'arrow_light.png')
+    try:
+        img_dark = Image.new('RGBA', (32, 32), (0, 0, 0, 0))
+        draw_dark = ImageDraw.Draw(img_dark)
+        draw_dark.line([(8, 12), (16, 20), (24, 12)], fill='#94a3b8', width=4)
+        img_dark.save(dark_path)
+
+        img_light = Image.new('RGBA', (32, 32), (0, 0, 0, 0))
+        draw_light = ImageDraw.Draw(img_light)
+        draw_light.line([(8, 12), (16, 20), (24, 12)], fill='#64748b', width=4)
+        img_light.save(light_path)
+    except Exception as e:
+        logging.warning(f"Arrow icons could not be generated: {e}")
+
+    return dark_path.replace('\\', '/'), light_path.replace('\\', '/')
+
+
+DARK_ARROW_PATH, LIGHT_ARROW_PATH = ensure_arrow_icons()
+
+
+def resource_path(relative_path):
+    """PyInstaller ile paketlendiğinde geçici çıkarma klasörünü, geliştirme ortamında script klasörünü döndürür."""
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
+
+
+def set_dark_title_bar(window, dark=True):
+    """Windows DWM API ile pencere başlık çubuğunun rengini koyu/açık temaya göre ayarlar."""
+    if sys.platform == "win32":
+        try:
+            hwnd = int(window.winId())
+            value = ctypes.c_int(1 if dark else 0)
+            dwm = ctypes.windll.dwmapi
+            # DWMWA_USE_IMMERSIVE_DARK_MODE = 20 (Win11 / Win10 20H1+)
+            res = dwm.DwmSetWindowAttribute(
+                hwnd,
+                20,
+                ctypes.byref(value),
+                ctypes.sizeof(value)
+            )
+            if res != 0:
+                # DWMWA_USE_IMMERSIVE_DARK_MODE = 19 (Önceki Win10 sürümleri)
+                dwm.DwmSetWindowAttribute(
+                    hwnd,
+                    19,
+                    ctypes.byref(value),
+                    ctypes.sizeof(value)
+                )
+        except Exception as e:
+            logging.debug(f"Title bar theme could not be set: {e}")
 
 
 # Log dosyası her açılışta silinmesin diye 1 MB'a ulaşınca döndürülüyor,
@@ -60,36 +109,235 @@ APP_NAME = "PDFlip"
 APP_VERSION = "1.0"
 
 THEMES = {
-    'dark': """
-        QMainWindow, QWidget { background-color: #202124; color: #e8eaed; }
-        QLabel { color: #e8eaed; }
-        QTabWidget::pane { border: 1px solid #3c4043; background-color: #202124; }
-        QTabBar::tab { background-color: #2d2e30; color: #e8eaed; padding: 8px 16px; }
-        QTabBar::tab:selected { background-color: #3c4043; }
-        QMenuBar { background-color: #202124; color: #e8eaed; }
-        QMenuBar::item:selected { background-color: #3c4043; }
-        QMenu { background-color: #2d2e30; color: #e8eaed; }
-        QMenu::item:selected { background-color: #3c4043; }
-        QDialog { background-color: #202124; color: #e8eaed; }
-        QProgressBar { background-color: #2d2e30; color: #e8eaed; border: 1px solid #3c4043; border-radius: 5px; text-align: center; }
-        QProgressBar::chunk { background-color: #77dd77; border-radius: 5px; }
-        QComboBox QAbstractItemView { background-color: #2d2e30; color: #e8eaed; selection-background-color: #3c4043; }
+    'dark': f"""
+        QMainWindow, QWidget {{ background-color: #141517; color: #f2f3f5; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; font-size: 13px; }}
+        QLabel {{ color: #f2f3f5; font-size: 13px; }}
+        QTabWidget::pane {{ border: 1px solid #31353c; background-color: #222429; border-radius: 8px; }}
+        QTabBar::tab {{ background-color: #1a1c1f; color: #9aa0a6; padding: 8px 20px; font-weight: 600; min-width: 130px; border-top-left-radius: 8px; border-top-right-radius: 8px; margin-right: 4px; }}
+        QTabBar::tab:selected {{ background-color: #222429; color: #ffffff; border-top: 2px solid #3b82f6; }}
+        QTabBar::tab:hover:!selected {{ background-color: #1f2125; color: #f2f3f5; }}
+        QMenuBar {{ background-color: #141517; color: #f2f3f5; font-size: 13px; }}
+        QMenuBar::item {{ padding: 6px 10px; border-radius: 4px; }}
+        QMenuBar::item:selected {{ background-color: #222429; }}
+        QMenu {{ background-color: #222429; color: #f2f3f5; border: 1px solid #31353c; border-radius: 8px; padding: 4px; }}
+        QMenu::item {{ padding: 6px 24px 6px 12px; border-radius: 4px; }}
+        QMenu::item:selected {{ background-color: #2d3037; color: #ffffff; }}
+        QDialog {{ background-color: #1c1e22; color: #f2f3f5; }}
+        QDialog QLabel {{ background-color: transparent; }}
+        QProgressBar {{ background-color: #1c1e22; color: #f2f3f5; border: 1px solid #31353c; border-radius: 6px; text-align: center; font-size: 12px; font-weight: bold; }}
+        QProgressBar::chunk {{ background-color: #22c55e; border-radius: 6px; }}
+
+        /* General Buttons */
+        QPushButton {{
+            background-color: #2d3037;
+            color: #f2f3f5;
+            border: 1px solid #3d414a;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            min-height: 28px;
+        }}
+        QPushButton:hover {{
+            background-color: #353942;
+            border-color: #60a5fa;
+            color: #ffffff;
+        }}
+        QPushButton:pressed {{
+            background-color: #3e434d;
+        }}
+        QPushButton:disabled {{
+            background-color: #18191c;
+            color: #64748b;
+            border-color: #27292e;
+        }}
+
+        /* Settings Save / Primary Button */
+        QPushButton#saveSettingsButton {{
+            background-color: #2563eb;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 18px;
+            font-size: 14px;
+            font-weight: bold;
+            min-height: 32px;
+        }}
+        QPushButton#saveSettingsButton:hover {{
+            background-color: #3b82f6;
+        }}
+        QPushButton#saveSettingsButton:pressed {{
+            background-color: #1d4ed8;
+        }}
+
+        /* QComboBox styling */
+        QComboBox {{
+            background-color: #2d3037;
+            color: #f2f3f5;
+            border: 1px solid #3d414a;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 500;
+            min-height: 28px;
+        }}
+        QComboBox:hover {{
+            border: 1px solid #60a5fa;
+        }}
+        QComboBox:focus {{
+            border: 1px solid #3b82f6;
+        }}
+        QComboBox::drop-down {{
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
+            width: 30px;
+            border: none;
+            background: transparent;
+        }}
+        QComboBox::down-arrow {{
+            image: url("{DARK_ARROW_PATH}");
+            width: 14px;
+            height: 14px;
+            margin-right: 12px;
+        }}
+        QComboBox QAbstractItemView {{
+            background-color: #222429;
+            color: #f2f3f5;
+            border: 1px solid #31353c;
+            selection-background-color: #2d3037;
+            selection-color: #ffffff;
+            outline: none;
+            padding: 6px;
+            border-radius: 8px;
+        }}
+        QComboBox QAbstractItemView::item {{
+            min-height: 32px;
+            padding: 6px 10px;
+            border-radius: 6px;
+        }}
+        QComboBox QAbstractItemView::item:selected {{
+            background-color: #2d3037;
+            color: #ffffff;
+        }}
     """,
-    'light': """
-        QMainWindow, QWidget { background-color: #f5f5f5; color: #1b1c1c; }
-        QLabel { color: #1b1c1c; }
-        QTabWidget::pane { border: 1px solid #d0d0d0; background-color: #f5f5f5; }
-        QTabBar::tab { background-color: #e8e8e8; color: #1b1c1c; padding: 8px 16px; }
-        QTabBar::tab:selected { background-color: #ffffff; }
-        QMenuBar { background-color: #f5f5f5; color: #1b1c1c; }
-        QMenuBar::item:selected { background-color: #d0d0d0; }
-        QMenu { background-color: #ffffff; color: #1b1c1c; }
-        QMenu::item:selected { background-color: #d0d0d0; }
-        QDialog { background-color: #f5f5f5; color: #1b1c1c; }
-        QProgressBar { background-color: #e8e8e8; color: #1b1c1c; border: 1px solid #d0d0d0; border-radius: 5px; text-align: center; }
-        QProgressBar::chunk { background-color: #77dd77; border-radius: 5px; }
-        QComboBox QAbstractItemView { background-color: #ffffff; color: #1b1c1c; selection-background-color: #d0d0d0; }
+    'light': f"""
+        QMainWindow, QWidget {{ background-color: #f8fafc; color: #0f172a; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; font-size: 13px; }}
+        QLabel {{ color: #0f172a; font-size: 13px; }}
+        QTabWidget::pane {{ border: 1px solid #e2e8f0; background-color: #ffffff; border-radius: 8px; }}
+        QTabBar::tab {{ background-color: #f1f5f9; color: #64748b; padding: 8px 20px; font-weight: 600; min-width: 130px; border-top-left-radius: 8px; border-top-right-radius: 8px; margin-right: 4px; }}
+        QTabBar::tab:selected {{ background-color: #ffffff; color: #2563eb; border-bottom: 2px solid #2563eb; }}
+        QTabBar::tab:hover:!selected {{ background-color: #e2e8f0; color: #0f172a; }}
+        QMenuBar {{ background-color: #f8fafc; color: #0f172a; font-size: 13px; }}
+        QMenuBar::item {{ padding: 6px 10px; border-radius: 4px; }}
+        QMenuBar::item:selected {{ background-color: #e2e8f0; }}
+        QMenu {{ background-color: #ffffff; color: #0f172a; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px; }}
+        QMenu::item {{ padding: 6px 24px 6px 12px; border-radius: 4px; }}
+        QMenu::item:selected {{ background-color: #eff6ff; color: #2563eb; }}
+        QDialog {{ background-color: #ffffff; color: #0f172a; }}
+        QDialog QLabel {{ background-color: transparent; }}
+        QProgressBar {{ background-color: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center; font-size: 12px; font-weight: bold; }}
+        QProgressBar::chunk {{ background-color: #16a34a; border-radius: 6px; }}
+
+        /* General Buttons */
+        QPushButton {{
+            background-color: #ffffff;
+            color: #0f172a;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            min-height: 28px;
+        }}
+        QPushButton:hover {{
+            background-color: #f1f5f9;
+            border-color: #2563eb;
+            color: #2563eb;
+        }}
+        QPushButton:pressed {{
+            background-color: #e2e8f0;
+        }}
+        QPushButton:disabled {{
+            background-color: #f1f5f9;
+            color: #94a3b8;
+            border-color: #e2e8f0;
+        }}
+
+        /* Settings Save / Primary Button */
+        QPushButton#saveSettingsButton {{
+            background-color: #2563eb;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 18px;
+            font-size: 14px;
+            font-weight: bold;
+            min-height: 32px;
+        }}
+        QPushButton#saveSettingsButton:hover {{
+            background-color: #1d4ed8;
+        }}
+        QPushButton#saveSettingsButton:pressed {{
+            background-color: #1e40af;
+        }}
+
+        /* QComboBox styling */
+        QComboBox {{
+            background-color: #ffffff;
+            color: #0f172a;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 500;
+            min-height: 28px;
+        }}
+        QComboBox:hover {{
+            border: 1px solid #2563eb;
+        }}
+        QComboBox:focus {{
+            border: 1px solid #2563eb;
+        }}
+        QComboBox::drop-down {{
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
+            width: 30px;
+            border: none;
+            background: transparent;
+        }}
+        QComboBox::down-arrow {{
+            image: url("{LIGHT_ARROW_PATH}");
+            width: 14px;
+            height: 14px;
+            margin-right: 12px;
+        }}
+        QComboBox QAbstractItemView {{
+            background-color: #ffffff;
+            color: #0f172a;
+            border: 1px solid #cbd5e1;
+            selection-background-color: #eff6ff;
+            selection-color: #2563eb;
+            outline: none;
+            padding: 6px;
+            border-radius: 8px;
+        }}
+        QComboBox QAbstractItemView::item {{
+            min-height: 32px;
+            padding: 6px 10px;
+            border-radius: 6px;
+        }}
+        QComboBox QAbstractItemView::item:selected {{
+            background-color: #eff6ff;
+            color: #2563eb;
+        }}
     """,
+}
+
+# QSS renkleri normal metin için kullanılıyor; zengin metin (About penceresindeki) linkler
+# ise kendi renklerini HTML içinde taşıdığından temaya göre ayrıca uyarlanıyor.
+LINK_COLORS = {
+    'dark': '#8ab4f8',
+    'light': '#1a73e8',
 }
 
 
@@ -112,6 +360,7 @@ translations = {
         'merge_horizontally': 'Convert to image & Merge Horizontally',
         'start_conversion': 'Start Conversion',
         'select_images': 'Select Images',
+        'image_file_filter': 'Images (*.png *.jpg *.jpeg *.bmp *.webp);;All Files (*)',
         'convert_to_pdf': 'Convert to PDF',
         'success': 'Success',
         'error': 'Error',
@@ -119,9 +368,11 @@ translations = {
         'conversion_successful': 'Conversion successful!',
         'conversion_failed': 'Conversion failed: ',
         'select_pdf_error': 'Please select a PDF file and an output folder.',
-        'select_image_folder_error': 'Please select an image folder.',
+        'select_image_folder_error': 'Please select one or more images.',
         'no_images_found_error': 'No images found in the selected folder.',
         'pdf_created_success': 'PDF created successfully: ',
+        'selected_images_prefix': 'Selected Image: ',
+        'images_selected_count': 'images selected',
         'large_merge_warning_message': 'You are about to merge {count} pages into a single image. This may use a large amount of memory and could fail. Do you want to continue?',
         'password_protected_error': 'This PDF is password protected. Please remove the password and try again.',
         'selected_pdf_prefix': 'Selected PDF: ',
@@ -146,8 +397,8 @@ translations = {
         'menu_about': 'About',
         'about_message': (
             '<b>Creator:</b> Mehmet Nevresoğlu<br>'
-            '<b>Contact:</b> <a href="mailto:mehmet@nevresoglu.net">mehmet@nevresoglu.net</a><br>'
-            '<b>LinkedIn:</b> <a href="https://www.linkedin.com/in/mehmet-nevresoglu-bb44341a/">Click here</a><br><br>'
+            '<b>Contact:</b> <a href="mailto:mehmet@nevresoglu.net" style="color:{link_color};">mehmet@nevresoglu.net</a><br>'
+            '<b>LinkedIn:</b> <a href="https://www.linkedin.com/in/mehmet-nevresoglu-bb44341a/" style="color:{link_color};">Click here</a><br><br>'
             'You can use this program anywhere as long as you cite it as a reference. No license required.'
         ),
         'settings_language': 'Language',
@@ -158,8 +409,8 @@ translations = {
         'theme_light': 'Light'
     },
     'tr': {
-        'tab1': 'PDF\'den Resime Dönüştür',
-        'tab2': 'Resimden PDF\'ye Dönüştür',
+        'tab1': 'PDF\'den Görsele',
+        'tab2': 'Görselden PDF\'ye',
         'select_pdf': 'PDF Seç',
         'select_output_folder': 'Çıktı Klasörünü Seç',
         'convert_to_image': 'Görüntüye dönüştür',
@@ -167,6 +418,7 @@ translations = {
         'merge_horizontally': 'Görüntüye dönüştür ve Yatay Birleştir',
         'start_conversion': 'Dönüştürmeyi Başlat',
         'select_images': 'Resimleri Seç',
+        'image_file_filter': 'Görseller (*.png *.jpg *.jpeg *.bmp *.webp);;Tüm Dosyalar (*)',
         'convert_to_pdf': 'PDF\'ye Dönüştür',
         'success': 'Başarılı',
         'error': 'Hata',
@@ -174,9 +426,11 @@ translations = {
         'conversion_successful': 'Dönüştürme başarılı!',
         'conversion_failed': 'Dönüştürme başarısız: ',
         'select_pdf_error': 'Lütfen bir PDF dosyası ve bir çıktı klasörü seçin.',
-        'select_image_folder_error': 'Lütfen bir resim klasörü seçin.',
+        'select_image_folder_error': 'Lütfen en az bir resim seçin.',
         'no_images_found_error': 'Seçilen klasörde resim bulunamadı.',
         'pdf_created_success': 'PDF başarıyla oluşturuldu: ',
+        'selected_images_prefix': 'Seçilen Resim: ',
+        'images_selected_count': 'resim seçildi',
         'large_merge_warning_message': '{count} sayfayı tek bir görselde birleştirmek üzeresiniz. Bu işlem çok fazla bellek kullanabilir ve başarısız olabilir. Devam etmek istiyor musunuz?',
         'password_protected_error': 'Bu PDF parola korumalı. Lütfen parolayı kaldırıp tekrar deneyin.',
         'selected_pdf_prefix': 'Seçilen PDF: ',
@@ -201,8 +455,8 @@ translations = {
         'menu_about': 'Hakkında',
         'about_message': (
             '<b>Geliştirici:</b> Mehmet Nevresoğlu<br>'
-            '<b>İletişim:</b> <a href="mailto:mehmet@nevresoglu.net">mehmet@nevresoglu.net</a><br>'
-            '<b>LinkedIn:</b> <a href="https://www.linkedin.com/in/mehmet-nevresoglu-bb44341a/">Buraya tıklayın</a><br><br>'
+            '<b>İletişim:</b> <a href="mailto:mehmet@nevresoglu.net" style="color:{link_color};">mehmet@nevresoglu.net</a><br>'
+            '<b>LinkedIn:</b> <a href="https://www.linkedin.com/in/mehmet-nevresoglu-bb44341a/" style="color:{link_color};">Buraya tıklayın</a><br><br>'
             'Bu programı kaynak belirttiğiniz sürece her yerde kullanabilirsiniz. Lisans gerektirmez.'
         ),
         'settings_language': 'Dil',
@@ -215,6 +469,47 @@ translations = {
 }
 
 
+class ToastNotification(QLabel):
+    """Sıkıntısız, OK butonuna tıklama gerektirmeyen floating toast bildirimi."""
+    def __init__(self, parent, message, duration=3800):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_DeleteOnClose)
+        self.setText(f"  ✔  {message}")
+        self.setWordWrap(True)
+        self.setStyleSheet("""
+            QLabel {
+                background-color: #1e293b;
+                color: #4ade80;
+                border: 1px solid #22c55e;
+                border-radius: 12px;
+                padding: 12px 24px;
+                font-weight: bold;
+                font-size: 13px;
+            }
+        """)
+
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(20)
+        shadow.setColor(QColor(0, 0, 0, 180))
+        shadow.setOffset(0, 4)
+        self.setGraphicsEffect(shadow)
+
+        self.adjustSize()
+        max_w = max(200, parent.width() - 60)
+        if self.width() > max_w:
+            self.setFixedWidth(max_w)
+            self.adjustSize()
+
+        parent_rect = parent.rect()
+        x = (parent_rect.width() - self.width()) // 2
+        y = parent_rect.height() - self.height() - 35
+        self.move(x, y)
+        self.show()
+        self.raise_()
+
+        QTimer.singleShot(duration, self.close)
+
+
 def load_settings_file():
     if os.path.exists(SETTINGS_FILE):
         try:
@@ -222,18 +517,22 @@ def load_settings_file():
                 data = json.load(file)
                 language = data.get('language', DEFAULT_LANGUAGE)
                 theme = data.get('theme', DEFAULT_THEME)
+                last_output_dir = data.get('last_output_dir', '')
+                valid_dir = last_output_dir if last_output_dir and os.path.isdir(last_output_dir) else ''
                 return (
                     language if language in translations else DEFAULT_LANGUAGE,
                     theme if theme in THEMES else DEFAULT_THEME,
+                    valid_dir
                 )
         except (json.JSONDecodeError, OSError):
             logging.warning("settings.json could not be read, falling back to defaults")
-    return DEFAULT_LANGUAGE, DEFAULT_THEME
+    return DEFAULT_LANGUAGE, DEFAULT_THEME, ''
 
 
-def save_settings_file(language, theme):
+def save_settings_file(language, theme, last_output_dir=''):
+    data = {'language': language, 'theme': theme, 'last_output_dir': last_output_dir}
     with open(SETTINGS_FILE, 'w') as file:
-        json.dump({'language': language, 'theme': theme}, file)
+        json.dump(data, file)
 
 
 class PdfToImageWorker(QThread):
@@ -479,16 +778,29 @@ class ImageExtractWorker(QThread):
 class PDFToImageConverter(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.language, self.theme = load_settings_file()
+        self.language, self.theme, self.last_output_dir = load_settings_file()
         self.translations = translations[self.language]
         self.pdf_worker = None
         self.image_worker = None
         self.compress_worker = None
         self.extract_worker = None
+
+        self.pdf_path = ''
+        self.save_path = self.last_output_dir if self.last_output_dir else ''
+        self.selected_image_files = []
+        self.image_save_path = self.last_output_dir if self.last_output_dir else ''
+        self.compress_pdf_path = ''
+        self.compress_output_path = self.last_output_dir if self.last_output_dir else ''
+        self.extract_pdf_path = ''
+        self.extract_output_path = self.last_output_dir if self.last_output_dir else ''
+
         self.initUI()
+        self.update_button_states()
+        logging.debug("UI initialized")
 
     def apply_theme(self):
         QApplication.instance().setStyleSheet(THEMES[self.theme])
+        set_dark_title_bar(self, dark=(self.theme == 'dark'))
 
     def initUI(self):
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
@@ -502,6 +814,8 @@ class PDFToImageConverter(QMainWindow):
         self.layout.setSpacing(15)
 
         self.tabs = QTabWidget()
+        self.tabs.setUsesScrollButtons(True)
+        self.tabs.tabBar().setElideMode(Qt.ElideNone)
         self.pdf_to_image_tab = QWidget()
         self.image_to_pdf_tab = QWidget()
         self.compress_pdf_tab = QWidget()
@@ -523,18 +837,8 @@ class PDFToImageConverter(QMainWindow):
         # Set window icon
         self.setWindowIcon(QIcon(resource_path('icon.ico')))
 
-        self.adjustSize()
-
-        self.pdf_path = ''
-        self.save_path = ''
-        self.image_folder = ''
-        self.compress_pdf_path = ''
-        self.compress_output_path = ''
-        self.extract_pdf_path = ''
-        self.extract_output_path = ''
-
-        self.update_button_states()
-        logging.debug("UI initialized")
+        self.setMinimumSize(880, 520)
+        self.resize(880, 520)
 
     def create_menu(self):
         self.menubar = self.menuBar()
@@ -576,7 +880,6 @@ class PDFToImageConverter(QMainWindow):
 
         self.combine_options = QComboBox(self)
         self.combine_options.setFont(font)
-        self.combine_options.setStyleSheet("padding: 5px; background-color: #3b3b3b; color: white; border-radius: 5px;")
         self.combine_options.addItem(self.translations['convert_to_image'], 'single')
         self.combine_options.addItem(self.translations['merge_vertically'], 'vertical')
         self.combine_options.addItem(self.translations['merge_horizontally'], 'horizontal')
@@ -585,7 +888,6 @@ class PDFToImageConverter(QMainWindow):
 
         self.file_type_options = QComboBox(self)
         self.file_type_options.setFont(font)
-        self.file_type_options.setStyleSheet("padding: 5px; background-color: #3b3b3b; color: white; border-radius: 5px;")
         self.file_type_options.addItem("JPG")
         self.file_type_options.addItem("PNG")
         self.file_type_options.currentIndexChanged.connect(self.clear_status)
@@ -623,6 +925,16 @@ class PDFToImageConverter(QMainWindow):
         self.images_label = QLabel('', self)
         self.images_label.setFont(QFont("", 12))  # Bilgi etiketlerinin fontu 12
         self.image_to_pdf_layout.addWidget(self.images_label)
+
+        self.image_output_btn = QPushButton(self.translations['select_output_folder'], self)
+        self.image_output_btn.setFont(font)
+        self.image_output_btn.clicked.connect(self.select_image_output_folder)
+        self.image_output_btn.setStyleSheet("color: white; padding: 10px; background-color: #3b3b3b; border-radius: 5px;")
+        self.image_to_pdf_layout.addWidget(self.image_output_btn)
+
+        self.image_output_label = QLabel('', self)
+        self.image_output_label.setFont(QFont("", 12))
+        self.image_to_pdf_layout.addWidget(self.image_output_label)
 
         self.convert_images_btn = QPushButton(self.translations['convert_to_pdf'], self)
         self.convert_images_btn.setFont(font)
@@ -669,7 +981,6 @@ class PDFToImageConverter(QMainWindow):
 
         self.compression_level_options = QComboBox(self)
         self.compression_level_options.setFont(font)
-        self.compression_level_options.setStyleSheet("padding: 5px; background-color: #3b3b3b; color: white; border-radius: 5px;")
         self.compression_level_options.addItem(self.translations['compression_extreme'], 'extreme')
         self.compression_level_options.addItem(self.translations['compression_basic'], 'basic')
         self.compression_level_options.addItem(self.translations['compression_balanced'], 'balanced')
@@ -752,10 +1063,17 @@ class PDFToImageConverter(QMainWindow):
             self.save_btn.setStyleSheet("background-color: #ff6961; color: white; padding: 10px; border-radius: 5px;")
             self.output_label.setText("")
 
-        if self.image_folder:
+        if self.selected_image_files:
             self.select_images_btn.setStyleSheet("background-color: #77dd77; color: white; padding: 10px; border-radius: 5px;")
         else:
             self.select_images_btn.setStyleSheet("background-color: #ff6961; color: white; padding: 10px; border-radius: 5px;")
+
+        if self.image_save_path:
+            self.image_output_btn.setStyleSheet("background-color: #77dd77; color: white; padding: 10px; border-radius: 5px;")
+            self.image_output_label.setText(f"{self.translations['output_folder_prefix']}{self.image_save_path}")
+        else:
+            self.image_output_btn.setStyleSheet("background-color: #ff6961; color: white; padding: 10px; border-radius: 5px;")
+            self.image_output_label.setText("")
 
         if self.compress_pdf_path:
             self.compress_select_btn.setStyleSheet("background-color: #77dd77; color: white; padding: 10px; border-radius: 5px;")
@@ -855,6 +1173,9 @@ class PDFToImageConverter(QMainWindow):
         self.pdf_worker.finished.connect(self.on_pdf_conversion_finished)
         self.pdf_worker.start()
 
+    def show_toast(self, message):
+        ToastNotification(self, message)
+
     def on_pdf_progress(self, current, total):
         self.pdf_progress_bar.setMaximum(total)
         self.pdf_progress_bar.setValue(current)
@@ -866,7 +1187,7 @@ class PDFToImageConverter(QMainWindow):
         self.pdf_progress_bar.setVisible(False)
 
         if success:
-            self.show_message(self.translations['success'], self.translations['conversion_successful'])
+            self.show_toast(self.translations['conversion_successful'])
             self.reset_state()
         elif error_message == "PDF_PASSWORD_PROTECTED":
             self.show_message(self.translations['error'], self.translations['password_protected_error'])
@@ -877,33 +1198,56 @@ class PDFToImageConverter(QMainWindow):
 
     def select_images(self):
         options = QFileDialog.Options()
-        self.image_folder = QFileDialog.getExistingDirectory(self, self.translations['select_images'], "", options=options)
-        self.update_button_states()
-        self.images_label.setText(f"{self.translations['selected_folder_prefix']}{self.image_folder}" if self.image_folder else "")
-        logging.debug(f"Image folder selected: {self.image_folder}")
+        initial_dir = self.image_save_path if (self.image_save_path and os.path.isdir(self.image_save_path)) else (
+            self.last_output_dir if (self.last_output_dir and os.path.isdir(self.last_output_dir)) else ""
+        )
+        files, _ = QFileDialog.getOpenFileNames(self, self.translations['select_images'], initial_dir, self.translations['image_file_filter'], options=options)
+        if files:
+            self.selected_image_files = files
+            if not self.image_save_path:
+                self.image_save_path = os.path.dirname(files[0])
+                self.last_output_dir = self.image_save_path
+                save_settings_file(self.language, self.theme, self.last_output_dir)
+            self.update_button_states()
+            if len(files) == 1:
+                self.images_label.setText(f"{self.translations['selected_images_prefix']}{os.path.basename(files[0])}")
+            else:
+                self.images_label.setText(f"{len(files)} {self.translations['images_selected_count']}")
+            logging.debug(f"{len(files)} image file(s) selected: {files}")
+
+    def select_image_output_folder(self):
+        options = QFileDialog.Options()
+        initial_dir = self.image_save_path if (self.image_save_path and os.path.isdir(self.image_save_path)) else (
+            self.last_output_dir if (self.last_output_dir and os.path.isdir(self.last_output_dir)) else ""
+        )
+        chosen = QFileDialog.getExistingDirectory(self, self.translations['select_output_folder'], initial_dir, options=options)
+        if chosen:
+            self.image_save_path = chosen
+            self.last_output_dir = chosen
+            save_settings_file(self.language, self.theme, self.last_output_dir)
+            self.update_button_states()
+            logging.debug(f"Image to PDF output folder selected: {self.image_save_path}")
 
     def _set_image_controls_enabled(self, enabled):
         self.select_images_btn.setEnabled(enabled)
+        self.image_output_btn.setEnabled(enabled)
         self.convert_images_btn.setEnabled(enabled)
 
     def convert_images_to_pdf(self):
-        if not self.image_folder:
+        if not self.selected_image_files:
             self.show_message(self.translations['error'], self.translations['select_image_folder_error'])
-            logging.error("Image folder not selected")
+            logging.error("No images selected")
+            return
+
+        if not self.image_save_path:
+            self.show_message(self.translations['error'], self.translations['select_pdf_error'])
+            logging.error("Output folder not selected for Image to PDF")
             return
 
         if self.image_worker is not None and self.image_worker.isRunning():
             return
 
-        image_files = [os.path.join(self.image_folder, f) for f in os.listdir(self.image_folder) if f.lower().endswith(("png", "jpg", "jpeg"))]
-        image_files.sort()
-
-        if not image_files:
-            self.show_message(self.translations['error'], self.translations['no_images_found_error'])
-            logging.error("No images found in the selected folder")
-            return
-
-        pdf_path = os.path.join(self.image_folder, "output.pdf")
+        pdf_path = os.path.join(self.image_save_path, "output.pdf")
 
         self._set_image_controls_enabled(False)
         self.convert_images_btn.setStyleSheet("padding: 10px; background-color: #3b3b3b; color: white; border: 2px solid green; border-radius: 5px;")
@@ -911,7 +1255,7 @@ class PDFToImageConverter(QMainWindow):
         self.image_progress_bar.setValue(0)
         self.image_to_pdf_status_label.setText('')
 
-        self.image_worker = ImageToPdfWorker(image_files, pdf_path)
+        self.image_worker = ImageToPdfWorker(list(self.selected_image_files), pdf_path)
         self.image_worker.progress.connect(self.on_image_progress)
         self.image_worker.finished.connect(lambda success, error_message: self.on_image_conversion_finished(success, error_message, pdf_path))
         self.image_worker.start()
@@ -927,7 +1271,7 @@ class PDFToImageConverter(QMainWindow):
         self.image_progress_bar.setVisible(False)
 
         if success:
-            self.show_message(self.translations['success'], f"{self.translations['pdf_created_success']}{pdf_path}")
+            self.show_toast(f"{self.translations['pdf_created_success']}{pdf_path}")
             self.reset_state()
         else:
             self.show_message(self.translations['error'], f"{self.translations['conversion_failed']}{error_message}")
@@ -943,10 +1287,15 @@ class PDFToImageConverter(QMainWindow):
 
     def select_compress_output(self):
         options = QFileDialog.Options()
-        self.compress_output_path = QFileDialog.getExistingDirectory(self, self.translations['select_output_folder'], "", options=options)
-        self.update_button_states()
-        self.clear_compress_status()
-        logging.debug(f"Output folder selected for compression: {self.compress_output_path}")
+        initial_dir = self.last_output_dir if (self.last_output_dir and os.path.isdir(self.last_output_dir)) else ""
+        chosen = QFileDialog.getExistingDirectory(self, self.translations['select_output_folder'], initial_dir, options=options)
+        if chosen:
+            self.compress_output_path = chosen
+            self.last_output_dir = chosen
+            save_settings_file(self.language, self.theme, self.last_output_dir)
+            self.update_button_states()
+            self.clear_compress_status()
+            logging.debug(f"Output folder selected for compression: {self.compress_output_path}")
 
     def clear_compress_status(self):
         self.compress_status_label.setText('')
@@ -996,7 +1345,7 @@ class PDFToImageConverter(QMainWindow):
             message = self.translations['compression_successful'].format(
                 before=format_size(before), after=format_size(after), percent=percent
             )
-            self.show_message(self.translations['success'], message)
+            self.show_toast(message)
             self.reset_compress_state()
         elif payload == "PDF_PASSWORD_PROTECTED":
             self.show_message(self.translations['error'], self.translations['password_protected_error'])
@@ -1007,7 +1356,7 @@ class PDFToImageConverter(QMainWindow):
 
     def reset_compress_state(self):
         self.compress_pdf_path = ""
-        self.compress_output_path = ""
+        self.compress_output_path = self.last_output_dir if self.last_output_dir else ""
         self.update_button_states()
         self.compress_status_label.setText("")
 
@@ -1020,10 +1369,15 @@ class PDFToImageConverter(QMainWindow):
 
     def select_extract_output(self):
         options = QFileDialog.Options()
-        self.extract_output_path = QFileDialog.getExistingDirectory(self, self.translations['select_output_folder'], "", options=options)
-        self.update_button_states()
-        self.clear_extract_status()
-        logging.debug(f"Output folder selected for image extraction: {self.extract_output_path}")
+        initial_dir = self.last_output_dir if (self.last_output_dir and os.path.isdir(self.last_output_dir)) else ""
+        chosen = QFileDialog.getExistingDirectory(self, self.translations['select_output_folder'], initial_dir, options=options)
+        if chosen:
+            self.extract_output_path = chosen
+            self.last_output_dir = chosen
+            save_settings_file(self.language, self.theme, self.last_output_dir)
+            self.update_button_states()
+            self.clear_extract_status()
+            logging.debug(f"Output folder selected for image extraction: {self.extract_output_path}")
 
     def clear_extract_status(self):
         self.extract_status_label.setText('')
@@ -1065,7 +1419,7 @@ class PDFToImageConverter(QMainWindow):
 
         if success:
             message = f"{self.translations['images_extracted_success'].format(count=payload)}{self.extract_output_path}"
-            self.show_message(self.translations['success'], message)
+            self.show_toast(message)
             self.reset_extract_state()
         elif payload == "PDF_PASSWORD_PROTECTED":
             self.show_message(self.translations['error'], self.translations['password_protected_error'])
@@ -1078,17 +1432,17 @@ class PDFToImageConverter(QMainWindow):
 
     def reset_extract_state(self):
         self.extract_pdf_path = ""
-        self.extract_output_path = ""
+        self.extract_output_path = self.last_output_dir if self.last_output_dir else ""
         self.update_button_states()
         self.extract_status_label.setText("")
 
     def reset_state(self):
         self.pdf_path = ""
-        self.save_path = ""
-        self.image_folder = ""
+        self.save_path = self.last_output_dir if self.last_output_dir else ""
+        self.selected_image_files = []
+        self.image_save_path = self.last_output_dir if self.last_output_dir else ""
         self.update_button_states()
         self.pdf_label.setText("")
-        self.output_label.setText("")
         self.images_label.setText("")
         self.status_label.setText("")
         self.image_to_pdf_status_label.setText("")
@@ -1101,7 +1455,7 @@ class PDFToImageConverter(QMainWindow):
         msg.exec_()
 
     def show_about(self):
-        about_text = self.translations['about_message']
+        about_text = self.translations['about_message'].format(link_color=LINK_COLORS[self.theme])
         about_msg = QMessageBox(self)
         about_msg.setWindowTitle(self.translations['menu_about'])
         about_msg.setTextFormat(Qt.RichText)
@@ -1110,40 +1464,66 @@ class PDFToImageConverter(QMainWindow):
 
     def show_settings(self):
         settings_dialog = QDialog(self)
+        settings_dialog.setWindowFlags(settings_dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         settings_dialog.setWindowTitle(self.translations['menu_settings'])
+        settings_dialog.setFixedWidth(360)
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(18)
 
+        # Language section
+        lang_layout = QVBoxLayout()
+        lang_layout.setSpacing(6)
         language_label = QLabel(self.translations['settings_language'])
-        layout.addWidget(language_label)
+        language_label.setStyleSheet("background: transparent; font-weight: 600; font-size: 13px; color: #94a3b8;" if self.theme == 'dark' else "background: transparent; font-weight: 600; font-size: 13px; color: #64748b;")
 
         language_combo = QComboBox()
         language_combo.addItem(self.translations['language_english'], 'en')
         language_combo.addItem(self.translations['language_turkish'], 'tr')
         language_combo.setCurrentIndex(0 if self.language == 'en' else 1)
-        layout.addWidget(language_combo)
+        lang_layout.addWidget(language_label)
+        lang_layout.addWidget(language_combo)
+        layout.addLayout(lang_layout)
 
+        # Theme section
+        theme_layout = QVBoxLayout()
+        theme_layout.setSpacing(6)
         theme_label = QLabel(self.translations['settings_theme'])
-        layout.addWidget(theme_label)
+        theme_label.setStyleSheet("background: transparent; font-weight: 600; font-size: 13px; color: #94a3b8;" if self.theme == 'dark' else "background: transparent; font-weight: 600; font-size: 13px; color: #64748b;")
 
         theme_combo = QComboBox()
         theme_combo.addItem(self.translations['theme_dark'], 'dark')
         theme_combo.addItem(self.translations['theme_light'], 'light')
         theme_combo.setCurrentIndex(0 if self.theme == 'dark' else 1)
-        layout.addWidget(theme_combo)
+        theme_layout.addWidget(theme_label)
+        theme_layout.addWidget(theme_combo)
+        layout.addLayout(theme_layout)
 
+        layout.addSpacing(6)
+
+        # Save button
         save_button = QPushButton(self.translations['save'])
-        save_button.clicked.connect(lambda: self.save_settings(language_combo.currentData(), theme_combo.currentData(), settings_dialog))
+        save_button.setObjectName("saveSettingsButton")
+        save_button.setCursor(Qt.PointingHandCursor)
+
+        def on_save_clicked():
+            lang = language_combo.currentData()
+            thm = theme_combo.currentData()
+            self.save_settings(lang, thm, settings_dialog)
+
+        save_button.clicked.connect(on_save_clicked)
         layout.addWidget(save_button)
 
         settings_dialog.setLayout(layout)
-        settings_dialog.resize(300, 200)
+        settings_dialog.adjustSize()
+        set_dark_title_bar(settings_dialog, dark=(self.theme == 'dark'))
         settings_dialog.exec_()
 
     def save_settings(self, language, theme, dialog):
         self.language = language
         self.theme = theme
-        save_settings_file(language, theme)
+        save_settings_file(language, theme, self.last_output_dir)
         self.translations = translations[self.language]
         self.apply_theme()
         self.retranslate_ui()
@@ -1159,6 +1539,7 @@ class PDFToImageConverter(QMainWindow):
         self.save_btn.setText(self.translations['select_output_folder'])
         self.process_btn.setText(self.translations['start_conversion'])
         self.select_images_btn.setText(self.translations['select_images'])
+        self.image_output_btn.setText(self.translations['select_output_folder'])
         self.convert_images_btn.setText(self.translations['convert_to_pdf'])
         self.combine_options.setItemText(0, self.translations['convert_to_image'])
         self.combine_options.setItemText(1, self.translations['merge_vertically'])
@@ -1196,10 +1577,8 @@ if __name__ == "__main__":
         app.setWindowIcon(QIcon(resource_path("icon.ico")))  # Set app icon
 
         ex = PDFToImageConverter()
-        ex.adjustSize()
-
-        # Set the window width to 1.5 times its original width
-        ex.resize(int(ex.width() * 1.5), ex.height())
+        ex.setMinimumSize(880, 520)
+        ex.resize(880, 520)
 
         screen = app.primaryScreen()
         screen_geometry = screen.availableGeometry()
