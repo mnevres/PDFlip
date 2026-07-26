@@ -176,10 +176,10 @@ THEMES = {
             color: #f2f3f5;
             border: 1px solid #3d414a;
             border-radius: 8px;
-            padding: 8px 12px;
-            font-size: 13px;
+            padding: 10px 14px;
+            font-size: 14px;
             font-weight: 500;
-            min-height: 28px;
+            min-height: 32px;
         }}
         QComboBox:hover {{
             border: 1px solid #60a5fa;
@@ -211,9 +211,11 @@ THEMES = {
             border-radius: 8px;
         }}
         QComboBox QAbstractItemView::item {{
-            min-height: 32px;
-            padding: 6px 10px;
+            min-height: 48px;
+            padding: 12px 16px;
             border-radius: 6px;
+            font-size: 15px;
+            font-weight: 500;
         }}
         QComboBox QAbstractItemView::item:selected {{
             background-color: #2d3037;
@@ -287,10 +289,10 @@ THEMES = {
             color: #0f172a;
             border: 1px solid #cbd5e1;
             border-radius: 8px;
-            padding: 8px 12px;
-            font-size: 13px;
+            padding: 10px 14px;
+            font-size: 14px;
             font-weight: 500;
-            min-height: 28px;
+            min-height: 32px;
         }}
         QComboBox:hover {{
             border: 1px solid #2563eb;
@@ -322,9 +324,11 @@ THEMES = {
             border-radius: 8px;
         }}
         QComboBox QAbstractItemView::item {{
-            min-height: 32px;
-            padding: 6px 10px;
+            min-height: 48px;
+            padding: 12px 16px;
             border-radius: 6px;
+            font-size: 15px;
+            font-weight: 500;
         }}
         QComboBox QAbstractItemView::item:selected {{
             background-color: #eff6ff;
