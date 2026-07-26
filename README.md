@@ -31,9 +31,9 @@ Designed for efficiency, this tool helps you manage your documents quickly witho
 
 ### 🖼️ Screenshots
 
-| PDF to Image | Image to PDF | Compress PDF |
-| :-----------: | :-----------: | :-----------: |
-| ![PDF to Image](pdf_to_image.png) | ![Image to PDF](image_to_pdf.png) | ![Compress PDF](compress.png) |
+| PDF to Image | Image to PDF | Compress PDF | Extract Images |
+| :-----------: | :-----------: | :-----------: | :-----------: |
+| ![PDF to Image](pdf_to_image.png) | ![Image to PDF](image_to_pdf.png) | ![Compress PDF](compress.png) | ![Extract Images](extract_images.png) |
 
 ### 🚀 Download
 
@@ -75,9 +75,9 @@ Verimlilik için tasarlanan bu araç, karmaşık yazılımlara ihtiyaç duymadan
 
 ### 🖼️ Ekran Görüntüleri
 
-| PDF'den Resme | Resimden PDF'ye | PDF Sıkıştırma |
-| :-------------: | :---------------: | :--------------: |
-| ![PDF to Image](pdf_to_image.png) | ![Image to PDF](image_to_pdf.png) | ![Compress PDF](compress.png) |
+| PDF'den Resme | Resimden PDF'ye | PDF Sıkıştırma | Resim Çıkarma |
+| :-------------: | :---------------: | :--------------: | :--------------: |
+| ![PDF to Image](pdf_to_image.png) | ![Image to PDF](image_to_pdf.png) | ![Compress PDF](compress.png) | ![Extract Images](extract_images.png) |
 
 ### 🚀 İndirme
 
