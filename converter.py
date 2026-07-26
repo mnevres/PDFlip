@@ -211,12 +211,12 @@ THEMES = {
             selection-background-color: #2d3037;
             selection-color: #ffffff;
             outline: none;
-            padding: 6px;
+            padding: 8px;
             border-radius: 8px;
         }}
         QComboBox QAbstractItemView::item {{
-            min-height: 48px;
-            padding: 12px 16px;
+            min-height: 56px;
+            padding: 16px 20px;
             border-radius: 6px;
             font-size: 15px;
             font-weight: 500;
@@ -324,12 +324,12 @@ THEMES = {
             selection-background-color: #eff6ff;
             selection-color: #2563eb;
             outline: none;
-            padding: 6px;
+            padding: 8px;
             border-radius: 8px;
         }}
         QComboBox QAbstractItemView::item {{
-            min-height: 48px;
-            padding: 12px 16px;
+            min-height: 56px;
+            padding: 16px 20px;
             border-radius: 6px;
             font-size: 15px;
             font-weight: 500;
@@ -355,6 +355,20 @@ def format_size(num_bytes):
         if size < 1024 or unit == 'GB':
             return f"{size:.0f} {unit}" if unit == 'B' else f"{size:.1f} {unit}"
         size /= 1024
+
+
+def unique_path(path):
+    """Aynı isimde bir dosya zaten varsa üzerine yazmak yerine ' (2)', ' (3)' ... ekleyerek
+    benzersiz bir yol döndürür."""
+    if not os.path.exists(path):
+        return path
+    base, ext = os.path.splitext(path)
+    counter = 2
+    while True:
+        candidate = f"{base} ({counter}){ext}"
+        if not os.path.exists(candidate):
+            return candidate
+        counter += 1
 
 # Dil metinleri
 translations = {
@@ -769,7 +783,7 @@ class PdfCompressWorker(QThread):
                 self.progress.emit(i + 1, page_count)
 
             base_name = os.path.splitext(os.path.basename(self.pdf_path))[0]
-            out_path = os.path.join(self.save_path, f"{base_name}_compressed.pdf")
+            out_path = unique_path(os.path.join(self.save_path, f"{base_name}_compressed_{self.level}.pdf"))
             doc.save(out_path, garbage=4, deflate=True, clean=True)
 
             new_size = os.path.getsize(out_path)
@@ -1323,7 +1337,7 @@ class PDFToImageConverter(QMainWindow):
         # os.path.join uses a backslash on Windows even when image_save_path came from Qt's
         # dialog (which always uses forward slashes) -- normalize so the path shown in the
         # toast doesn't mix separators.
-        pdf_path = os.path.join(self.image_save_path, "output.pdf").replace("\\", "/")
+        pdf_path = unique_path(os.path.join(self.image_save_path, "output.pdf")).replace("\\", "/")
 
         self._set_image_controls_enabled(False)
         self.convert_images_btn.setStyleSheet("padding: 10px; background-color: #3b3b3b; color: white; border: 2px solid green; border-radius: 5px;")
