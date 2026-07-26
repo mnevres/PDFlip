@@ -104,6 +104,10 @@ DEFAULT_THEME = 'dark'
 # Büyük PDF'leri tek görselde birleştirirken kullanıcıyı uyarmak için sayfa eşiği
 LARGE_MERGE_PAGE_THRESHOLD = 150
 
+# JPEG formatının kesin piksel sınırı (libjpeg); aşılırsa "broken data stream when
+# writing image file" hatasıyla kayıt başarısız olur, bu yüzden PNG'ye düşülür.
+JPEG_MAX_DIMENSION = 65500
+
 # Uygulama adı marka olduğu için dile göre çevrilmiyor.
 APP_NAME = "PDFlip"
 APP_VERSION = "1.0"
@@ -370,6 +374,7 @@ translations = {
         'error': 'Error',
         'warning': 'Warning',
         'conversion_successful': 'Conversion successful!',
+        'format_changed_to_png_note': '(saved as PNG -- the merged image was too large for JPEG)',
         'conversion_failed': 'Conversion failed: ',
         'select_pdf_file_error': 'Please select a PDF file.',
         'select_output_folder_error': 'Please select an output folder.',
@@ -430,6 +435,7 @@ translations = {
         'error': 'Hata',
         'warning': 'Uyarı',
         'conversion_successful': 'Dönüştürme başarılı!',
+        'format_changed_to_png_note': '(PNG olarak kaydedildi -- birleştirilen görsel JPEG için çok büyüktü)',
         'conversion_failed': 'Dönüştürme başarısız: ',
         'select_pdf_file_error': 'Lütfen bir PDF dosyası seçin.',
         'select_output_folder_error': 'Lütfen bir çıktı klasörü seçin.',
@@ -595,6 +601,19 @@ class PdfToImageWorker(QThread):
             logging.debug(f"Image extracted from page {i}")
         return images
 
+    def _save_combined_image(self, combined_image, base_name):
+        """JPEG'in 65500px'lik kesin sınırını aşan birleştirilmiş görselleri PNG'ye
+        düşürerek kaydeder; aksi halde Pillow "broken data stream when writing
+        image file" hatasıyla kayda hiç başlamadan çöker."""
+        file_type = self.file_type
+        if file_type == 'jpg' and max(combined_image.size) > JPEG_MAX_DIMENSION:
+            file_type = 'png'
+            logging.warning(
+                f"Combined image {combined_image.size} exceeds JPEG's {JPEG_MAX_DIMENSION}px limit, saving as PNG instead"
+            )
+        combined_image.save(os.path.join(self.save_path, f"{base_name}.{file_type}"))
+        return file_type != self.file_type
+
     def run(self):
         doc = None
         try:
@@ -605,6 +624,7 @@ class PdfToImageWorker(QThread):
             page_count = len(doc)
             zoom = 3  # 3x zoom, resulting in 216 DPI
             mat = fitz.Matrix(zoom, zoom)
+            format_changed = False
 
             if self.combine_mode == 'vertical' and page_count > 1:
                 images = self._extract_all_pages(doc, mat, page_count)
@@ -614,7 +634,7 @@ class PdfToImageWorker(QThread):
                 for img in images:
                     combined_image.paste(img, (0, y_offset))
                     y_offset += img.height
-                combined_image.save(os.path.join(self.save_path, f"output_combined_vertical.{self.file_type}"))
+                format_changed = self._save_combined_image(combined_image, "output_combined_vertical")
                 logging.debug("Images merged vertically")
             elif self.combine_mode == 'horizontal' and page_count > 1:
                 images = self._extract_all_pages(doc, mat, page_count)
@@ -624,7 +644,7 @@ class PdfToImageWorker(QThread):
                 for img in images:
                     combined_image.paste(img, (x_offset, 0))
                     x_offset += img.width
-                combined_image.save(os.path.join(self.save_path, f"output_combined_horizontal.{self.file_type}"))
+                format_changed = self._save_combined_image(combined_image, "output_combined_horizontal")
                 logging.debug("Images merged horizontally")
             else:
                 # Sayfaları listede biriktirmeden tek tek diske yazıyoruz;
@@ -637,7 +657,7 @@ class PdfToImageWorker(QThread):
                     logging.debug(f"Image saved: output_page_{i + 1}.{self.file_type}")
                     self.progress.emit(i + 1, page_count)
 
-            self.finished.emit(True, "")
+            self.finished.emit(True, "FORMAT_CHANGED_TO_PNG" if format_changed else "")
             logging.info("Conversion successful")
         except Exception as e:
             logging.error(f"Conversion failed: {e}")
@@ -1239,7 +1259,10 @@ class PDFToImageConverter(QMainWindow):
         self.pdf_progress_bar.setVisible(False)
 
         if success:
-            self.show_toast(self.translations['conversion_successful'], folder_to_open=self.save_path)
+            message = self.translations['conversion_successful']
+            if error_message == "FORMAT_CHANGED_TO_PNG":
+                message += f" {self.translations['format_changed_to_png_note']}"
+            self.show_toast(message, folder_to_open=self.save_path)
             self.reset_state()
         elif error_message == "PDF_PASSWORD_PROTECTED":
             self.show_message(self.translations['error'], self.translations['password_protected_error'])
