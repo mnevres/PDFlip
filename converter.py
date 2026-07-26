@@ -1115,10 +1115,15 @@ class PDFToImageConverter(QMainWindow):
 
     def save_location(self):
         options = QFileDialog.Options()
-        self.save_path = QFileDialog.getExistingDirectory(self, self.translations['select_output_folder'], "", options=options)
-        self.update_button_states()
-        self.clear_status()
-        logging.debug(f"Output folder selected: {self.save_path}")
+        initial_dir = self.last_output_dir if (self.last_output_dir and os.path.isdir(self.last_output_dir)) else ""
+        chosen = QFileDialog.getExistingDirectory(self, self.translations['select_output_folder'], initial_dir, options=options)
+        if chosen:
+            self.save_path = chosen
+            self.last_output_dir = chosen
+            save_settings_file(self.language, self.theme, self.last_output_dir)
+            self.update_button_states()
+            self.clear_status()
+            logging.debug(f"Output folder selected: {self.save_path}")
 
     def _set_pdf_controls_enabled(self, enabled):
         self.upload_btn.setEnabled(enabled)
