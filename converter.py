@@ -945,8 +945,8 @@ class PDFToImageConverter(QMainWindow):
 
         self.file_type_options = QComboBox(self)
         self.file_type_options.setFont(font)
-        self.file_type_options.addItem("JPG")
         self.file_type_options.addItem("PNG")
+        self.file_type_options.addItem("JPG")
         self.file_type_options.currentIndexChanged.connect(self.clear_status)
         self.pdf_to_image_layout.addWidget(self.file_type_options)
 
