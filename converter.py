@@ -1246,16 +1246,14 @@ class PDFToImageConverter(QMainWindow):
 
     def select_images(self):
         options = QFileDialog.Options()
-        initial_dir = self.image_save_path if (self.image_save_path and os.path.isdir(self.image_save_path)) else (
-            self.last_output_dir if (self.last_output_dir and os.path.isdir(self.last_output_dir)) else ""
-        )
+        initial_dir = self.last_input_dir if (self.last_input_dir and os.path.isdir(self.last_input_dir)) else ""
         files, _ = QFileDialog.getOpenFileNames(self, self.translations['select_images'], initial_dir, self.translations['image_file_filter'], options=options)
         if files:
             self.selected_image_files = files
+            self.last_input_dir = os.path.dirname(files[0])
             if not self.image_save_path:
-                self.image_save_path = os.path.dirname(files[0])
-                self.last_output_dir = self.image_save_path
-                save_settings_file(self.language, self.theme, self.last_output_dir, self.last_input_dir)
+                self.image_save_path = self.last_input_dir
+            save_settings_file(self.language, self.theme, self.last_output_dir, self.last_input_dir)
             self.update_button_states()
             if len(files) == 1:
                 self.images_label.setText(f"{self.translations['selected_images_prefix']}{os.path.basename(files[0])}")
@@ -1295,7 +1293,10 @@ class PDFToImageConverter(QMainWindow):
         if self.image_worker is not None and self.image_worker.isRunning():
             return
 
-        pdf_path = os.path.join(self.image_save_path, "output.pdf")
+        # os.path.join uses a backslash on Windows even when image_save_path came from Qt's
+        # dialog (which always uses forward slashes) -- normalize so the path shown in the
+        # toast doesn't mix separators.
+        pdf_path = os.path.join(self.image_save_path, "output.pdf").replace("\\", "/")
 
         self._set_image_controls_enabled(False)
         self.convert_images_btn.setStyleSheet("padding: 10px; background-color: #3b3b3b; color: white; border: 2px solid green; border-radius: 5px;")
